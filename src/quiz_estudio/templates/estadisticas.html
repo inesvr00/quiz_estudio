@@ -7,7 +7,7 @@
         <p class="hint">Resumen de los intentos guardados.</p>
     </div>
 
-    <a href="{{ url_for('index') }}">Volver</a>
+    <a href="{{ url_for('quiz.index') }}">Volver</a>
 </header>
 
 <section class="stats-grid">
@@ -54,7 +54,7 @@
                             <td>{{ topic.preguntas_en_repositorio }}</td>
                             <td>{{ topic.preguntas_respondidas_distintas }}</td>
                             <td>
-                                <a href="{{ url_for('preguntas_no_hechas', tema=topic.tema) }}">
+                                <a href="{{ url_for('stats.preguntas_no_hechas', tema=topic.tema) }}">
                                     {{ topic.preguntas_no_hechas }}
                                 </a>
                             </td>

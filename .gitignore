@@ -1,2 +1,67 @@
-/.venv
-/__pycache__
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Flask / environment variables
+.env
+.env.*
+instance/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checkers / linters
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# Project-generated folders
+backups/
+imports/pendientes/
+imports/importadas/
+imports/errores/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo

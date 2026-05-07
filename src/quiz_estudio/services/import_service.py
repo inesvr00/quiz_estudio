@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import csv
 import io
 import re
@@ -8,9 +7,9 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from ..config import BACKUP_DIR, CSV_PATH
 
-MAIN_CSV_PATH = Path("preguntas.csv")
-BACKUP_DIR = Path("backups")
+
 EXPECTED_COLUMNS = [
     "enunciado",
     "opcion_1",
@@ -37,13 +36,13 @@ def normalize_enunciado(enunciado: str) -> str:
 
 
 def validate_main_csv_rows() -> list[dict[str, str]]:
-    if not MAIN_CSV_PATH.exists():
-        raise FileNotFoundError(f"No existe el CSV principal: {MAIN_CSV_PATH}")
+    if not CSV_PATH.exists():
+        raise FileNotFoundError(f"No existe el CSV principal: {CSV_PATH}")
 
     rows = []
     errors = []
 
-    with MAIN_CSV_PATH.open("r", encoding="utf-8-sig", newline="") as file:
+    with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
         validate_header(reader.fieldnames)
 
@@ -56,7 +55,7 @@ def validate_main_csv_rows() -> list[dict[str, str]]:
 
     if errors:
         raise ValueError(
-            "preguntas.csv contiene filas inválidas:\n" + "\n".join(errors)
+            "preguntas.csv contiene filas invalidas:\n" + "\n".join(errors)
         )
 
     return rows
@@ -84,11 +83,11 @@ def validate_row(row: dict[str, str], row_number: int) -> list[str]:
     errors = []
 
     if None in row:
-        errors.append("tiene más columnas que la cabecera")
+        errors.append("tiene mas columnas que la cabecera")
 
     for column in REQUIRED_NON_EMPTY:
         if not row.get(column, "").strip():
-            errors.append(f"{column} está vacío")
+            errors.append(f"{column} esta vacio")
 
     raw_answer = row.get("respuesta_correcta", "").strip()
     if raw_answer:
@@ -113,20 +112,20 @@ def create_backup() -> Path:
     BACKUP_DIR.mkdir(exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = BACKUP_DIR / f"preguntas_{timestamp}.csv"
-    shutil.copy2(MAIN_CSV_PATH, backup_path)
+    shutil.copy2(CSV_PATH, backup_path)
     return backup_path
 
 
 def ensure_csv_ends_with_newline() -> None:
-    if not MAIN_CSV_PATH.exists() or MAIN_CSV_PATH.stat().st_size == 0:
+    if not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0:
         return
 
-    with MAIN_CSV_PATH.open("rb") as file:
+    with CSV_PATH.open("rb") as file:
         file.seek(-1, 2)
         last_byte = file.read(1)
 
     if last_byte != b"\n":
-        with MAIN_CSV_PATH.open("a", encoding="utf-8-sig", newline="") as file:
+        with CSV_PATH.open("a", encoding="utf-8-sig", newline="") as file:
             file.write("\n")
 
 
@@ -191,7 +190,7 @@ def append_questions(rows: list[dict[str, str]]) -> Path | None:
 
     backup_path = create_backup()
     ensure_csv_ends_with_newline()
-    with MAIN_CSV_PATH.open("a", encoding="utf-8-sig", newline="") as file:
+    with CSV_PATH.open("a", encoding="utf-8-sig", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=EXPECTED_COLUMNS)
         writer.writerows(
             {column: row[column] for column in EXPECTED_COLUMNS}
@@ -203,7 +202,7 @@ def append_questions(rows: list[dict[str, str]]) -> Path | None:
 
 
 def rewrite_main_csv(rows: list[dict[str, str]]) -> None:
-    with MAIN_CSV_PATH.open("w", encoding="utf-8-sig", newline="") as file:
+    with CSV_PATH.open("w", encoding="utf-8-sig", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=EXPECTED_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
@@ -245,9 +244,9 @@ def import_questions(import_path: Path) -> int:
     rows_to_add = preview["valid"]
     backup_path = append_questions(rows_to_add)
 
-    print("Resumen de importación")
-    print(f"- preguntas leídas: {preview['total_read']}")
-    print(f"- preguntas añadidas: {len(rows_to_add)}")
+    print("Resumen de importacion")
+    print(f"- preguntas leidas: {preview['total_read']}")
+    print(f"- preguntas anadidas: {len(rows_to_add)}")
     print(f"- duplicadas ignoradas: {len(preview['duplicates'])}")
     print(f"- filas con errores: {len(preview['errors'])}")
 
@@ -261,29 +260,3 @@ def import_questions(import_path: Path) -> int:
                 print(f"- {error}")
 
     return 1 if preview["errors"] else 0
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Importa preguntas válidas y no duplicadas a preguntas.csv.",
-        epilog=(
-            "Validación manual tras importar: "
-            ".\\.venv\\Scripts\\python.exe -c \"from app import load_questions; "
-            "print(len(load_questions()))\""
-        ),
-    )
-    parser.add_argument("csv_path", type=Path, help="Ruta del CSV externo a importar.")
-    return parser.parse_args()
-
-
-def main() -> int:
-    args = parse_args()
-    try:
-        return import_questions(args.csv_path)
-    except (FileNotFoundError, ValueError, csv.Error) as error:
-        print(f"Error: {error}")
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

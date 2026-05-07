@@ -6,9 +6,9 @@
     <p>Elige los temas que quieres practicar y cuántas preguntas quieres responder antes de corregir.</p>
 
     <div class="actions secondary-actions">
-        <a href="{{ url_for('estadisticas') }}">Ver estadísticas</a>
-        <a href="{{ url_for('preguntas_falladas') }}">Preguntas más falladas</a>
-        <a href="{{ url_for('importar_preguntas') }}">Importar preguntas</a>
+        <a href="{{ url_for('stats.estadisticas') }}">Ver estadísticas</a>
+        <a href="{{ url_for('stats.preguntas_falladas') }}">Preguntas más falladas</a>
+        <a href="{{ url_for('import_questions.importar_preguntas') }}">Importar preguntas</a>
     </div>
 
     {% if error %}
