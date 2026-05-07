@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Preguntas más falladas</h1>
+        {% if selected_tema %}
+            <p class="hint">Filtrando por tema: {{ selected_tema }}</p>
+        {% else %}
+            <p class="hint">Mostrando todos los temas</p>
+        {% endif %}
+    </div>
+
+    <a href="{{ url_for('index') }}">Volver</a>
+</header>
+
+<section class="card">
+    <form method="get" class="filter-form">
+        <label for="tema">
+            Tema
+            <select id="tema" name="tema">
+                <option value="">Todos los temas</option>
+                {% for tema in topics %}
+                    <option value="{{ tema }}" {% if tema == selected_tema %}selected{% endif %}>
+                        {{ tema }}
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label for="orden">
+            Ordenación
+            <select id="orden" name="orden">
+                <option value="porcentaje" {% if selected_orden == "porcentaje" %}selected{% endif %}>
+                    Por porcentaje de fallo
+                </option>
+                <option value="fallos" {% if selected_orden == "fallos" %}selected{% endif %}>
+                    Por número de fallos
+                </option>
+            </select>
+        </label>
+
+        <button type="submit">Filtrar</button>
+    </form>
+</section>
+
+<section class="card">
+    {% if questions %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Pregunta</th>
+                        <th>Tema</th>
+                        <th>Intentos</th>
+                        <th>Aciertos</th>
+                        <th>Fallos</th>
+                        <th>% fallo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for q in questions %}
+                        <tr>
+                            <td>{{ q.enunciado }}</td>
+                            <td>{{ q.tema }}</td>
+                            <td>{{ q.total }}</td>
+                            <td>{{ q.aciertos }}</td>
+                            <td>{{ q.fallos }}</td>
+                            <td>{{ q.porcentaje_fallo }}%</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    {% else %}
+        <p class="hint">Aún no hay preguntas falladas para este filtro.</p>
+    {% endif %}
+
+    <nav class="pagination">
+        {% if page > 1 %}
+            <a href="{{ url_for('preguntas_falladas', tema=selected_tema, orden=selected_orden, page=page - 1) }}">Anterior</a>
+        {% else %}
+            <span>Anterior</span>
+        {% endif %}
+
+        <strong>Página {{ page }} de {{ total_pages }}</strong>
+
+        {% if page < total_pages %}
+            <a href="{{ url_for('preguntas_falladas', tema=selected_tema, orden=selected_orden, page=page + 1) }}">Siguiente</a>
+        {% else %}
+            <span>Siguiente</span>
+        {% endif %}
+    </nav>
+</section>
+{% endblock %}

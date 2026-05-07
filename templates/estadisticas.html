@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Estadísticas</h1>
+        <p class="hint">Resumen de los intentos guardados.</p>
+    </div>
+
+    <a href="{{ url_for('index') }}">Volver</a>
+</header>
+
+<section class="stats-grid">
+    <div class="stat-card">
+        <span>Total respondidas</span>
+        <strong>{{ stats.total }}</strong>
+    </div>
+    <div class="stat-card">
+        <span>Aciertos</span>
+        <strong>{{ stats.aciertos }}</strong>
+    </div>
+    <div class="stat-card">
+        <span>Fallos</span>
+        <strong>{{ stats.fallos }}</strong>
+    </div>
+    <div class="stat-card">
+        <span>Acierto global</span>
+        <strong>{{ stats.porcentaje }}%</strong>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Por tema</h2>
+
+    {% if stats.topics %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tema</th>
+                        <th>Preguntas en repositorio</th>
+                        <th>Respondidas distintas</th>
+                        <th>No hechas</th>
+                        <th>Total intentos</th>
+                        <th>Aciertos</th>
+                        <th>Fallos</th>
+                        <th>% acierto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for topic in stats.topics %}
+                        <tr>
+                            <td>{{ topic.tema }}</td>
+                            <td>{{ topic.preguntas_en_repositorio }}</td>
+                            <td>{{ topic.preguntas_respondidas_distintas }}</td>
+                            <td>
+                                <a href="{{ url_for('preguntas_no_hechas', tema=topic.tema) }}">
+                                    {{ topic.preguntas_no_hechas }}
+                                </a>
+                            </td>
+                            <td>{{ topic.total }}</td>
+                            <td>{{ topic.aciertos }}</td>
+                            <td>{{ topic.fallos }}</td>
+                            <td>
+                                {% if topic.porcentaje is none %}
+                                    Sin datos
+                                {% else %}
+                                    {{ topic.porcentaje }}%
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="hint">Todavía no hay respuestas guardadas.</p>
+    {% endif %}
+</section>
+{% endblock %}

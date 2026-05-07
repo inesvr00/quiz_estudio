@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Corrección</h1>
+        <p class="score">Resultado: {{ score }}/{{ total }}</p>
+    </div>
+
+    <div class="actions">
+        <a href="{{ url_for('otra_mas') }}">Otra más</a>
+        <a href="{{ url_for('reiniciar') }}">Nuevo quiz</a>
+    </div>
+</header>
+
+{% for q in questions %}
+    <section class="question-card {% if q.es_correcta %}correct{% else %}incorrect{% endif %}">
+        <p class="topic">{{ q.tema }}</p>
+        <h2>{{ loop.index }}. {{ q.enunciado }}</h2>
+
+        <div class="options-result">
+            {% for i in range(1, 5) %}
+                {% set is_correct = i == q.respuesta_correcta %}
+                {% set is_user = i == q.respuesta_usuario %}
+
+                <div class="option-result
+                    {% if is_correct %}answer-correct{% endif %}
+                    {% if is_user and not is_correct %}answer-wrong{% endif %}
+                ">
+                    <strong>{{ i }}.</strong> {{ q["opcion_" ~ i] }}
+
+                    {% if is_correct %}
+                        <span class="badge">Correcta</span>
+                    {% endif %}
+
+                    {% if is_user and not is_correct %}
+                        <span class="badge wrong">Tu respuesta</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+
+        {% if q.respuesta_usuario is none %}
+            <p class="warning">No respondiste esta pregunta.</p>
+        {% endif %}
+
+        <div class="explanation">
+            <strong>Explicación:</strong> {{ q.explicacion }}
+        </div>
+    </section>
+{% endfor %}
+{% endblock %}

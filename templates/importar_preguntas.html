@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Importar preguntas</h1>
+        <p class="hint">Pega un CSV con la misma cabecera que preguntas.csv.</p>
+    </div>
+
+    <a href="{{ url_for('index') }}">Volver</a>
+</header>
+
+<section class="card">
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    {% if success %}
+        <p class="success">{{ success }}</p>
+    {% endif %}
+
+    <form method="post">
+        <textarea name="csv_text" rows="12" placeholder="enunciado,opcion_1,opcion_2,opcion_3,opcion_4,respuesta_correcta,explicacion,tema">{{ csv_text }}</textarea>
+
+        <div class="actions import-actions">
+            <button type="submit" name="action" value="validate">Validar</button>
+            {% if preview and preview.valid %}
+                <button type="submit" name="action" value="confirm">Confirmar importación</button>
+            {% endif %}
+        </div>
+    </form>
+</section>
+
+{% if preview %}
+    <section class="stats-grid">
+        <div class="stat-card">
+            <span>Leídas</span>
+            <strong>{{ preview.total_read }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>Válidas</span>
+            <strong>{{ preview.valid|length }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>Duplicadas</span>
+            <strong>{{ preview.duplicates|length }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>Con errores</span>
+            <strong>{{ preview.errors|length }}</strong>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Preguntas válidas</h2>
+        {% if preview.valid %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fila</th>
+                            <th>Pregunta</th>
+                            <th>Tema</th>
+                            <th>Correcta</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for q in preview.valid %}
+                            <tr>
+                                <td>{{ q.row_number }}</td>
+                                <td>{{ q.enunciado }}</td>
+                                <td>{{ q.tema }}</td>
+                                <td>{{ q.respuesta_correcta }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="hint">No hay preguntas válidas nuevas.</p>
+        {% endif %}
+    </section>
+
+    <section class="card">
+        <h2>Preguntas duplicadas</h2>
+        {% if preview.duplicates %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fila</th>
+                            <th>Pregunta</th>
+                            <th>Tema</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for q in preview.duplicates %}
+                            <tr>
+                                <td>{{ q.row_number }}</td>
+                                <td>{{ q.enunciado }}</td>
+                                <td>{{ q.tema }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="hint">No se detectaron duplicados.</p>
+        {% endif %}
+    </section>
+
+    <section class="card">
+        <h2>Preguntas con errores</h2>
+        {% if preview.errors %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fila</th>
+                            <th>Pregunta</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for q in preview.errors %}
+                            <tr>
+                                <td>{{ q.row_number }}</td>
+                                <td>{{ q.enunciado }}</td>
+                                <td>
+                                    {% for error in q.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="hint">No se detectaron errores.</p>
+        {% endif %}
+    </section>
+{% endif %}
+{% endblock %}

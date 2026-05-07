@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+    <h1>Quiz de estudio</h1>
+    <p>Elige los temas que quieres practicar y cuántas preguntas quieres responder antes de corregir.</p>
+
+    <div class="actions secondary-actions">
+        <a href="{{ url_for('estadisticas') }}">Ver estadísticas</a>
+        <a href="{{ url_for('preguntas_falladas') }}">Preguntas más falladas</a>
+        <a href="{{ url_for('importar_preguntas') }}">Importar preguntas</a>
+    </div>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form method="post">
+        <h2>Temas</h2>
+
+        <div class="topics">
+            {% for tema in topics %}
+                <label class="checkbox">
+                    <input type="checkbox" name="temas" value="{{ tema }}">
+                    {{ tema }}
+                </label>
+            {% endfor %}
+        </div>
+
+        <p class="hint">Si no marcas ningún tema, saldrán preguntas de todos los temas.</p>
+
+        <h2>Preguntas antes de corregir</h2>
+
+        <div class="radio-group">
+            <label><input type="radio" name="batch_size" value="1"> 1 en 1</label>
+            <label><input type="radio" name="batch_size" value="10" checked> 10 en 10</label>
+            <label><input type="radio" name="batch_size" value="20"> 20 en 20</label>
+        </div>
+
+        <button type="submit">Empezar</button>
+    </form>
+</section>
+{% endblock %}
