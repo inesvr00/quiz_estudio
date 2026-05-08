@@ -15,7 +15,7 @@ def save_attempts(questions: list[dict[str, Any]]) -> None:
             question["tema"],
             question["respuesta_correcta"],
             question["respuesta_usuario"],
-            int(question["es_correcta"]),
+            bool(question["es_correcta"]),
         )
         for question in questions
         if question["respuesta_usuario"] is not None

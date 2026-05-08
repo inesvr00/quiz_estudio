@@ -281,6 +281,25 @@ class PostgresAttemptRepository(AttemptRepository):
         )
 
     def save_attempts(self, attempts: Iterable[AttemptRow]) -> None:
+        normalized_attempts = [
+            (
+                question_id,
+                enunciado,
+                tema,
+                respuesta_correcta,
+                respuesta_usuario,
+                bool(es_correcta),
+            )
+            for (
+                question_id,
+                enunciado,
+                tema,
+                respuesta_correcta,
+                respuesta_usuario,
+                es_correcta,
+            ) in attempts
+        ]
+
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.executemany(
@@ -295,7 +314,7 @@ class PostgresAttemptRepository(AttemptRepository):
                     )
                     VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    list(attempts),
+                    normalized_attempts,
                 )
 
     def get_seen_question_ids(self) -> set[int]:
