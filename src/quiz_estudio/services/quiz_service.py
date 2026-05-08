@@ -3,19 +3,11 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from ..db import get_db_connection
+from ..db import get_attempt_repository
 
 
 def get_seen_question_ids() -> set[int]:
-    with get_db_connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT DISTINCT question_id
-            FROM question_attempts
-            """
-        ).fetchall()
-
-    return {row["question_id"] for row in rows}
+    return get_attempt_repository().get_seen_question_ids()
 
 
 def weighted_sample_without_replacement(
