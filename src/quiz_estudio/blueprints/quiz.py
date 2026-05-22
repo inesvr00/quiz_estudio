@@ -13,6 +13,32 @@ from ..services.stats_service import save_attempts
 quiz_bp = Blueprint("quiz", __name__)
 
 
+def _parse_batch_size(form) -> tuple[int, str | None]:
+    mode = (form.get("quiz_size_mode") or form.get("batch_size") or "10").strip()
+    custom_raw = (form.get("custom_num_preguntas") or form.get("custom_batch_size") or "").strip()
+
+    if mode == "custom":
+        try:
+            custom_size = int(custom_raw)
+        except ValueError:
+            return 10, "El número personalizado debe ser un entero mayor que 0."
+
+        if custom_size <= 0:
+            return 10, "El número personalizado debe ser mayor que 0."
+
+        return custom_size, None
+
+    try:
+        selected_size = int(mode)
+    except ValueError:
+        selected_size = 10
+
+    if selected_size not in ALLOWED_BATCH_SIZES:
+        selected_size = 10
+
+    return selected_size, None
+
+
 @quiz_bp.route("/", methods=["GET", "POST"])
 def index():
     questions = load_questions()
@@ -20,13 +46,10 @@ def index():
 
     if request.method == "POST":
         selected_topics = request.form.getlist("temas")
-        batch_size = int(request.form.get("batch_size", 10))
+        batch_size, warning = _parse_batch_size(request.form)
 
         if not selected_topics:
             selected_topics = topics
-
-        if batch_size not in ALLOWED_BATCH_SIZES:
-            batch_size = 10
 
         selected_questions = select_quiz_questions(
             questions,
@@ -41,9 +64,19 @@ def index():
                 error="No hay preguntas para los temas seleccionados.",
             )
 
+        if batch_size > len(selected_questions):
+            warning = (
+                f"Solo hay {len(selected_questions)} preguntas disponibles para los temas seleccionados. "
+                f"Se usará ese máximo."
+            )
+
         session["questions"] = selected_questions
         session["selected_topics"] = selected_topics
         session["batch_size"] = batch_size
+        if warning:
+            session["quiz_notice"] = warning
+        else:
+            session.pop("quiz_notice", None)
 
         return redirect(url_for("quiz.quiz"))
 
@@ -53,6 +86,7 @@ def index():
 @quiz_bp.route("/quiz", methods=["GET", "POST"])
 def quiz():
     questions: list[dict[str, Any]] = session.get("questions", [])
+    notice = session.pop("quiz_notice", None)
 
     if not questions:
         return redirect(url_for("quiz.index"))
@@ -91,7 +125,7 @@ def quiz():
             total=total,
         )
 
-    return render_template("quiz.html", questions=questions)
+    return render_template("quiz.html", questions=questions, notice=notice)
 
 
 @quiz_bp.route("/reiniciar")

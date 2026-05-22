@@ -29,15 +29,89 @@
 
         <p class="hint">Si no marcas ningún tema, saldrán preguntas de todos los temas.</p>
 
-        <h2>Preguntas antes de corregir</h2>
+        <section class="quiz-size-card" aria-labelledby="count-heading">
+            <div class="count-card__header">
+                <h2 id="count-heading">Número de preguntas</h2>
+                <p class="hint">Elige una opción rápida o define una cantidad personalizada.</p>
+            </div>
 
-        <div class="radio-group">
-            <label><input type="radio" name="batch_size" value="1"> 1 en 1</label>
-            <label><input type="radio" name="batch_size" value="10" checked> 10 en 10</label>
-            <label><input type="radio" name="batch_size" value="20"> 20 en 20</label>
-        </div>
+            <div class="quiz-size-options" role="radiogroup" aria-label="Número de preguntas">
+                <label class="quiz-size-option">
+                    <input type="radio" name="quiz_size_mode" value="1">
+                    <span class="quiz-size-title">1 pregunta</span>
+                </label>
+
+                <label class="quiz-size-option">
+                    <input type="radio" name="quiz_size_mode" value="10" checked>
+                    <span class="quiz-size-title">10 preguntas</span>
+                </label>
+
+                <label class="quiz-size-option quiz-size-option-custom">
+                    <input type="radio" name="quiz_size_mode" value="custom">
+                    <span class="quiz-size-title">Personalizado</span>
+                    <input
+                        type="number"
+                        name="custom_num_preguntas"
+                        id="custom_num_preguntas"
+                        min="1"
+                        step="1"
+                        placeholder="Ej. 25"
+                        class="quiz-size-custom-input"
+                    >
+                </label>
+            </div>
+
+            <p class="hint">Si escribes un número válido, se usará ese valor. Si dejas el campo vacío o inválido, el backend usará una opción segura.</p>
+        </section>
 
         <button type="submit">Empezar</button>
     </form>
 </section>
+
+<script>
+(function () {
+    const customInput = document.querySelector("#custom_num_preguntas");
+    const quickOptions = Array.from(document.querySelectorAll('input[name="quiz_size_mode"]'));
+    const optionLabels = Array.from(document.querySelectorAll('.quiz-size-option'));
+
+    if (!customInput || quickOptions.length === 0) {
+        return;
+    }
+
+    const customRadio = quickOptions.find((input) => input.value === "custom");
+
+    const syncSelectedState = () => {
+        optionLabels.forEach((label) => label.classList.remove("is-selected"));
+
+        quickOptions.forEach((input) => {
+            if (input.checked) {
+                const label = input.closest(".quiz-size-option");
+                if (label) {
+                    label.classList.add("is-selected");
+                }
+            }
+        });
+    };
+
+    customInput.addEventListener("focus", () => {
+        if (customRadio) {
+            customRadio.checked = true;
+            syncSelectedState();
+        }
+    });
+
+    customInput.addEventListener("input", () => {
+        if (customRadio) {
+            customRadio.checked = true;
+            syncSelectedState();
+        }
+    });
+
+    quickOptions.forEach((input) => {
+        input.addEventListener("change", syncSelectedState);
+    });
+
+    syncSelectedState();
+})();
+</script>
 {% endblock %}

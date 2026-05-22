@@ -6,6 +6,10 @@
     <a href="{{ url_for('quiz.reiniciar') }}">Cambiar temas</a>
 </header>
 
+{% if notice %}
+    <p class="warning">{{ notice }}</p>
+{% endif %}
+
 <form method="post">
     {% for q in questions %}
         <section class="question-card">

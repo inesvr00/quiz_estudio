@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    <div class="physics-decoration atom atom-1" aria-hidden="true"></div>
+    <div class="physics-decoration atom atom-2" aria-hidden="true"></div>
+    <div class="physics-decoration wave wave-1" aria-hidden="true"></div>
+    <div class="physics-decoration wave wave-2" aria-hidden="true"></div>
+    <div class="physics-decoration orbit orbit-1" aria-hidden="true"></div>
+    <div class="physics-decoration formula formula-1" aria-hidden="true">E = mc²</div>
+    <div class="physics-decoration formula formula-2" aria-hidden="true">λ = h/p</div>
+    <div class="physics-decoration formula formula-3" aria-hidden="true">∇ · E = ρ/ε₀</div>
+    <div class="physics-decoration constellation constellation-1" aria-hidden="true"></div>
+    <div class="physics-decoration constellation constellation-2" aria-hidden="true"></div>
+    <div class="physics-decoration grid grid-1" aria-hidden="true"></div>
     <main class="container">
         {% block content %}{% endblock %}
     </main>

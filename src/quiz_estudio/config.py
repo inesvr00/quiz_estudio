@@ -11,5 +11,5 @@ DATABASE_URL = "postgresql://postgres.sidzjtxybrtypdppcfhv:9udtdjMgYbLm1OdH@aws-
 SECRET_KEY = "quiz-estudio-una-clave-larga-random-2026"
 APP_PASSWORD = "quiero estudiar"
 PAGE_SIZE = 50
-ALLOWED_BATCH_SIZES = {1, 10, 20}
+ALLOWED_BATCH_SIZES = {1, 10}
 BACKUP_DIR = PROJECT_ROOT / "backups"
