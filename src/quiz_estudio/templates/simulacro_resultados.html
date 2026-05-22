@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Resultados del simulacro</h1>
+        <p class="score">Netas: {{ summary.netas }}</p>
+    </div>
+
+    <div class="actions">
+        <a href="{{ url_for('simulacro.index') }}">Nuevo simulacro</a>
+        <a href="{{ url_for('simulacro.estadisticas') }}">Estadísticas simulacros</a>
+        <a href="{{ url_for('simulacro.reiniciar') }}">Cambiar número</a>
+    </div>
+</header>
+
+{% if warning %}
+    <p class="warning">{{ warning }}</p>
+{% endif %}
+
+<section class="stats-grid">
+    <div class="stat-card">
+        <span>Acertadas</span>
+        <strong>{{ summary.acertadas }}</strong>
+    </div>
+    <div class="stat-card">
+        <span>Falladas</span>
+        <strong>{{ summary.falladas }}</strong>
+    </div>
+    <div class="stat-card">
+        <span>Sin responder</span>
+        <strong>{{ summary.sin_responder }}</strong>
+    </div>
+    <div class="stat-card">
+        <span>Netas</span>
+        <strong>{{ summary.netas }}</strong>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Por tema</h2>
+    <p class="hint">El porcentaje se calcula como acertadas / respondidas para no penalizar las preguntas en blanco. Si un tema no aparece, se muestra una raya.</p>
+
+    {% if summary.topics %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tema</th>
+                        <th>Preguntas</th>
+                        <th>Respondidas</th>
+                        <th>Acertadas</th>
+                        <th>Falladas</th>
+                        <th>% acierto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for topic in summary.topics %}
+                        <tr>
+                            <td>{{ topic.tema }}</td>
+                            <td>{{ topic.total }}</td>
+                            <td>{{ topic.respondidas }}</td>
+                            <td>{{ topic.acertadas }}</td>
+                            <td>{{ topic.falladas }}</td>
+                            <td>
+                                {% if topic.porcentaje is none %}
+                                    —
+                                {% else %}
+                                    {{ topic.porcentaje }}%
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</section>
+
+{% for q in questions %}
+    <section class="question-card {% if q.es_correcta %}correct{% else %}incorrect{% endif %}">
+        <p class="topic">{{ q.tema }}</p>
+        <h2>{{ loop.index }}. {{ q.enunciado }}</h2>
+
+        <div class="options-result">
+            {% for i in range(1, 5) %}
+                {% set is_correct = i == q.respuesta_correcta %}
+                {% set is_user = i == q.respuesta_usuario %}
+
+                <div class="option-result
+                    {% if is_correct %}answer-correct{% endif %}
+                    {% if is_user and not is_correct %}answer-wrong{% endif %}
+                ">
+                    <strong>{{ i }}.</strong> {{ q["opcion_" ~ i] }}
+
+                    {% if is_correct %}
+                        <span class="badge">Correcta</span>
+                    {% endif %}
+
+                    {% if is_user and not is_correct %}
+                        <span class="badge wrong">Tu respuesta</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+
+        {% if q.respuesta_usuario is none %}
+            <p class="warning">No respondiste esta pregunta.</p>
+        {% endif %}
+
+        <div class="explanation">
+            <strong>Explicación:</strong> {{ q.explicacion }}
+        </div>
+    </section>
+{% endfor %}
+{% endblock %}

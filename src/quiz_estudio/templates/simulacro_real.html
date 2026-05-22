@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+    <h1>Simulacro real de examen</h1>
+    <p>Genera un examen con bloques temáticos y una distribución aproximada de 210 preguntas, o del total que elijas.</p>
+
+    <div class="actions secondary-actions">
+        <a href="{{ url_for('quiz.index') }}">Volver al quiz normal</a>
+        <a href="{{ url_for('simulacro.estadisticas') }}">Estadísticas simulacros</a>
+    </div>
+
+    <p class="hint">Preguntas disponibles en el repositorio: {{ available_total }}. El simulacro usa bloques temáticos fijos y varía ligeramente la distribución interna de temas.</p>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form method="post">
+        <label class="filter-form">
+            <span>Total de preguntas</span>
+            <input type="number" name="total_questions" min="1" value="{{ default_total }}" required>
+        </label>
+
+        <p class="hint">La fórmula de netas por defecto es: acertadas - falladas / 3.</p>
+
+        <button type="submit">Generar simulacro</button>
+    </form>
+</section>
+{% endblock %}

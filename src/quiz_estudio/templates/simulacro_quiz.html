@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Simulacro real de examen</h1>
+        <p class="hint">Responde {{ requested_total }} preguntas siguiendo la estructura por bloques temáticos.</p>
+    </div>
+
+    <div class="actions">
+        <a href="{{ url_for('simulacro.reiniciar') }}">Cambiar número</a>
+        <a href="{{ url_for('simulacro.estadisticas') }}">Estadísticas simulacros</a>
+        <a href="{{ url_for('quiz.index') }}">Quiz normal</a>
+    </div>
+</header>
+
+{% if warning %}
+    <p class="warning">{{ warning }}</p>
+{% endif %}
+
+<form method="post">
+    {% for q in questions %}
+        <section class="question-card">
+            <p class="topic">{{ q.tema }}</p>
+            <h2>{{ loop.index }}. {{ q.enunciado }}</h2>
+
+            {% for i in range(1, 5) %}
+                <label class="option">
+                    <input type="radio" name="pregunta_{{ q.csv_id }}" value="{{ i }}">
+                    <span>{{ i }}. {{ q["opcion_" ~ i] }}</span>
+                </label>
+            {% endfor %}
+        </section>
+    {% endfor %}
+
+    <button type="submit" class="finish-button">Terminar simulacro</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    // Keep-alive ping to avoid sleeping during long simulacros.
+    // Runs every 5 minutes while the page is open. Silent on failure.
+    const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    let timer = setInterval(async () => {
+        try {
+            await fetch('/ping', { method: 'GET', cache: 'no-store' });
+        } catch (err) {
+            // Intentionally silent: do not disturb the user on network errors.
+        }
+    }, INTERVAL_MS);
+
+    window.addEventListener('beforeunload', () => clearInterval(timer));
+})();
+</script>
+{% endblock %}

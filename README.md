@@ -139,8 +139,11 @@ de entorno.
 
 - `/`
 - `/quiz`
+- `/simulacro`
+- `/simulacro/quiz`
 - `/otra-mas`
 - `/reiniciar`
+- `/simulacro/reiniciar`
 - `/estadisticas`
 - `/preguntas-falladas`
 - `/preguntas-no-hechas`

@@ -10,6 +10,15 @@ from ..config import DB_PATH
 
 
 AttemptRow = tuple[int, str, str, int, int, bool]
+SimulacroAttemptRow = tuple[
+    str,
+    int,
+    str,
+    str,
+    int,
+    int | None,
+    bool,
+]
 
 
 class AttemptRepository(ABC):
@@ -19,6 +28,31 @@ class AttemptRepository(ABC):
 
     @abstractmethod
     def save_attempts(self, attempts: Iterable[AttemptRow]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_simulacro_attempts(
+        self,
+        attempts: Iterable[SimulacroAttemptRow],
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_exam_attempt(self, exam_attempt: tuple) -> int:
+        """Save a high-level exam attempt summary and return its id."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_exam_topic_stats(self, topic_stats: Iterable[tuple]) -> None:
+        """Save per-topic stats for an exam attempt."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_all_exam_attempts(self) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_exam_attempt_topics(self, exam_attempt_id: int) -> list[dict[str, Any]]:
         raise NotImplementedError
 
     @abstractmethod
@@ -73,6 +107,64 @@ class SqliteAttemptRepository(AttemptRepository):
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS simulacro_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    simulacro_id TEXT NOT NULL,
+                    question_id INTEGER NOT NULL,
+                    enunciado TEXT NOT NULL,
+                    tema TEXT NOT NULL,
+                    respuesta_correcta INTEGER NOT NULL,
+                    respuesta_usuario INTEGER,
+                    es_correcta INTEGER NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_simulacro_attempts_simulacro_id
+                ON simulacro_attempts (simulacro_id)
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS exam_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    simulacro_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    total_questions INTEGER NOT NULL,
+                    correct INTEGER NOT NULL,
+                    wrong INTEGER NOT NULL,
+                    unanswered INTEGER NOT NULL,
+                    net_score REAL NOT NULL,
+                    accuracy_percentage REAL
+                )
+                """
+            )
+
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS exam_attempt_topic_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    exam_attempt_id INTEGER NOT NULL,
+                    topic TEXT NOT NULL,
+                    total_questions INTEGER NOT NULL,
+                    correct INTEGER NOT NULL,
+                    wrong INTEGER NOT NULL,
+                    unanswered INTEGER NOT NULL,
+                    accuracy_percentage REAL,
+                    FOREIGN KEY (exam_attempt_id) REFERENCES exam_attempts(id) ON DELETE CASCADE
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_exam_attempts_simulacro_id
+                ON exam_attempts (simulacro_id)
+                """
+            )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(DB_PATH)
@@ -116,6 +208,108 @@ class SqliteAttemptRepository(AttemptRepository):
                     ) in attempts
                 ],
             )
+
+    def save_simulacro_attempts(
+        self,
+        attempts: Iterable[SimulacroAttemptRow],
+    ) -> None:
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO simulacro_attempts (
+                    simulacro_id,
+                    question_id,
+                    enunciado,
+                    tema,
+                    respuesta_correcta,
+                    respuesta_usuario,
+                    es_correcta
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        simulacro_id,
+                        question_id,
+                        enunciado,
+                        tema,
+                        respuesta_correcta,
+                        respuesta_usuario,
+                        int(es_correcta),
+                    )
+                    for (
+                        simulacro_id,
+                        question_id,
+                        enunciado,
+                        tema,
+                        respuesta_correcta,
+                        respuesta_usuario,
+                        es_correcta,
+                    ) in attempts
+                ],
+            )
+
+    def save_exam_attempt(self, exam_attempt: tuple) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO exam_attempts (
+                    simulacro_id,
+                    total_questions,
+                    correct,
+                    wrong,
+                    unanswered,
+                    net_score,
+                    accuracy_percentage
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                exam_attempt,
+            )
+
+            return cursor.lastrowid
+
+    def save_exam_topic_stats(self, topic_stats: Iterable[tuple]) -> None:
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO exam_attempt_topic_stats (
+                    exam_attempt_id,
+                    topic,
+                    total_questions,
+                    correct,
+                    wrong,
+                    unanswered,
+                    accuracy_percentage
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                list(topic_stats),
+            )
+
+    def get_all_exam_attempts(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, simulacro_id, created_at, total_questions, correct, wrong, unanswered, net_score, accuracy_percentage
+                FROM exam_attempts
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+
+        return self._rows_to_dicts(rows)
+
+    def get_exam_attempt_topics(self, exam_attempt_id: int) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT topic, total_questions, correct, wrong, unanswered, accuracy_percentage
+                FROM exam_attempt_topic_stats
+                WHERE exam_attempt_id = ?
+                ORDER BY topic
+                """,
+                (exam_attempt_id,),
+            ).fetchall()
+
+        return self._rows_to_dicts(rows)
 
     def get_seen_question_ids(self) -> set[int]:
         with self._connect() as connection:
@@ -259,6 +453,21 @@ class PostgresAttemptRepository(AttemptRepository):
                 )
                 cursor.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS simulacro_attempts (
+                        id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                        simulacro_id TEXT NOT NULL,
+                        question_id INTEGER NOT NULL,
+                        enunciado TEXT NOT NULL,
+                        tema TEXT NOT NULL,
+                        respuesta_correcta INTEGER NOT NULL,
+                        respuesta_usuario INTEGER,
+                        es_correcta BOOLEAN NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
                     CREATE INDEX IF NOT EXISTS idx_question_attempts_question_id
                     ON question_attempts (question_id)
                     """
@@ -267,6 +476,48 @@ class PostgresAttemptRepository(AttemptRepository):
                     """
                     CREATE INDEX IF NOT EXISTS idx_question_attempts_tema
                     ON question_attempts (tema)
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_simulacro_attempts_simulacro_id
+                    ON simulacro_attempts (simulacro_id)
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS exam_attempts (
+                        id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                        simulacro_id TEXT NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        total_questions INTEGER NOT NULL,
+                        correct INTEGER NOT NULL,
+                        wrong INTEGER NOT NULL,
+                        unanswered INTEGER NOT NULL,
+                        net_score DOUBLE PRECISION NOT NULL,
+                        accuracy_percentage DOUBLE PRECISION
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS exam_attempt_topic_stats (
+                        id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                        exam_attempt_id BIGINT NOT NULL,
+                        topic TEXT NOT NULL,
+                        total_questions INTEGER NOT NULL,
+                        correct INTEGER NOT NULL,
+                        wrong INTEGER NOT NULL,
+                        unanswered INTEGER NOT NULL,
+                        accuracy_percentage DOUBLE PRECISION,
+                        CONSTRAINT fk_exam_attempt FOREIGN KEY (exam_attempt_id) REFERENCES exam_attempts(id) ON DELETE CASCADE
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_exam_attempts_simulacro_id
+                    ON exam_attempts (simulacro_id)
                     """
                 )
 
@@ -313,6 +564,131 @@ class PostgresAttemptRepository(AttemptRepository):
                         es_correcta
                     )
                     VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    normalized_attempts,
+                )
+
+    def save_exam_attempt(self, exam_attempt: tuple) -> int:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO exam_attempts (
+                        simulacro_id,
+                        total_questions,
+                        correct,
+                        wrong,
+                        unanswered,
+                        net_score,
+                        accuracy_percentage
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    exam_attempt,
+                )
+                row = cursor.fetchone()
+
+        return row["id"]
+
+    def save_exam_topic_stats(self, topic_stats: Iterable[tuple]) -> None:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    INSERT INTO exam_attempt_topic_stats (
+                        exam_attempt_id,
+                        topic,
+                        total_questions,
+                        correct,
+                        wrong,
+                        unanswered,
+                        accuracy_percentage
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    list(topic_stats),
+                )
+
+    def get_all_exam_attempts(self) -> list[dict[str, Any]]:
+        try:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT id, simulacro_id, created_at, total_questions, correct, wrong, unanswered, net_score, accuracy_percentage
+                        FROM exam_attempts
+                        ORDER BY created_at DESC
+                        """
+                    )
+                    rows = cursor.fetchall()
+
+            return rows
+        except Exception as exc:  # pragma: no cover - defensive for runtime DB differences
+            msg = str(exc).lower()
+            if "does not exist" in msg or "relation \"exam_attempts\" does not exist" in msg:
+                return []
+            raise
+
+    def get_exam_attempt_topics(self, exam_attempt_id: int) -> list[dict[str, Any]]:
+        try:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT topic, total_questions, correct, wrong, unanswered, accuracy_percentage
+                        FROM exam_attempt_topic_stats
+                        WHERE exam_attempt_id = %s
+                        ORDER BY topic
+                        """,
+                        (exam_attempt_id,)
+                    )
+                    rows = cursor.fetchall()
+
+            return rows
+        except Exception as exc:  # pragma: no cover - defensive for runtime DB differences
+            msg = str(exc).lower()
+            if "does not exist" in msg or "relation \"exam_attempt_topic_stats\" does not exist" in msg:
+                return []
+            raise
+
+    def save_simulacro_attempts(
+        self,
+        attempts: Iterable[SimulacroAttemptRow],
+    ) -> None:
+        normalized_attempts = [
+            (
+                simulacro_id,
+                question_id,
+                enunciado,
+                tema,
+                respuesta_correcta,
+                respuesta_usuario,
+                bool(es_correcta),
+            )
+            for (
+                simulacro_id,
+                question_id,
+                enunciado,
+                tema,
+                respuesta_correcta,
+                respuesta_usuario,
+                es_correcta,
+            ) in attempts
+        ]
+
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    INSERT INTO simulacro_attempts (
+                        simulacro_id,
+                        question_id,
+                        enunciado,
+                        tema,
+                        respuesta_correcta,
+                        respuesta_usuario,
+                        es_correcta
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     normalized_attempts,
                 )

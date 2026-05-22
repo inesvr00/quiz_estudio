@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Detalle del simulacro</h1>
+        <p class="hint">Registro realizado: {{ attempt.created_at }}</p>
+    </div>
+
+    <a href="{{ url_for('simulacro.estadisticas') }}">Volver</a>
+</header>
+
+<section class="card">
+    <h2>Resumen</h2>
+    <div class="table-wrap">
+        <table>
+            <tbody>
+                <tr><th>Total preguntas</th><td>{{ attempt.total_questions }}</td></tr>
+                <tr><th>Aciertos</th><td>{{ attempt.correct }}</td></tr>
+                <tr><th>Falladas</th><td>{{ attempt.wrong }}</td></tr>
+                <tr><th>Sin responder</th><td>{{ attempt.unanswered }}</td></tr>
+                <tr><th>Netas</th><td>{{ attempt.net_score }}</td></tr>
+                <tr><th>% acierto</th><td>{% if attempt.accuracy_percentage is none %}—{% else %}{{ attempt.accuracy_percentage }}%{% endif %}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Por tema</h2>
+    {% if topics %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tema</th>
+                        <th>Total</th>
+                        <th>Aciertos</th>
+                        <th>Fallos</th>
+                        <th>Sin responder</th>
+                        <th>% acierto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in topics %}
+                        <tr>
+                            <td>{{ t.topic }}</td>
+                            <td>{{ t.total_questions }}</td>
+                            <td>{{ t.correct }}</td>
+                            <td>{{ t.wrong }}</td>
+                            <td>{{ t.unanswered }}</td>
+                            <td>{% if t.accuracy_percentage is none %}—{% else %}{{ t.accuracy_percentage }}%{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="hint">No hay datos por tema para este simulacro.</p>
+    {% endif %}
+</section>
+
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Estadísticas de simulacros</h1>
+        <p class="hint">Histórico de exámenes tipo simulacro realizados.</p>
+    </div>
+
+    <a href="{{ url_for('simulacro.index') }}">Volver</a>
+</header>
+
+{% if error %}
+    <p class="hint">{{ error }}</p>
+{% endif %}
+
+{% if attempts %}
+    <div class="table-wrap card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Total</th>
+                    <th>Aciertos</th>
+                    <th>Fallos</th>
+                    <th>Sin responder</th>
+                    <th>Netas</th>
+                    <th>% acierto</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in attempts %}
+                    <tr>
+                        <td>{{ a.created_at }}</td>
+                        <td>{{ a.total_questions }}</td>
+                        <td>{{ a.correct }}</td>
+                        <td>{{ a.wrong }}</td>
+                        <td>{{ a.unanswered }}</td>
+                        <td>{{ a.net_score }}</td>
+                        <td>
+                            {% if a.accuracy_percentage is none %}
+                                —
+                            {% else %}
+                                {{ a.accuracy_percentage }}%
+                            {% endif %}
+                        </td>
+                        <td><a href="{{ url_for('simulacro.estadisticas_detalle', attempt_id=a.id) }}">Ver</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+{% endblock %}
