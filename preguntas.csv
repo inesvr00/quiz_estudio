@@ -1,4 +1,4 @@
-﻿enunciado,opción_1,opción_2,opción_3,opción_4,respuesta_correcta,explicacion,tema
+﻿enunciado,opcion_1,opcion_2,opcion_3,opcion_4,respuesta_correcta,explicacion,tema
 "Debido al quenching, la respuesta de un centelleador orgánico se describe mediante la fórmula de:",Lambert,Maier y Nitschke,Clark,Birks,4,La ley de Birks describe la no proporcionalidad entre dL/dx y dE/dx en centelleadores orgánicos.,Detectores
 "En un contador Geiger-Müller, el gas de quench se utiliza principalmente para:",Evitar calentamiento por corte eléctrico,Evitar ionizaciones por fotones UV,Aumentar la presión,Medir energía,2,"El gas de quench absorbe fotones UV y reduce descargas secundarias, evitando pulsos múltiples.",Detectores
 "Si una muestra radiactiva reduce su actividad a la mitad en 8 días, su periodo de semidesintegración es:",13 días,48 h,8 días,57 h,3,El periodo de semidesintegración es el tiempo necesario para que la actividad se reduzca a la mitad.,Desintegraciones
