@@ -70,12 +70,9 @@ def index():
                 f"Se usará ese máximo."
             )
 
-        session["question_ids"] = [q["id"] for q in selected_questions]
+        session["questions"] = selected_questions
         session["selected_topics"] = selected_topics
         session["batch_size"] = batch_size
-        session["current_index"] = 0
-        session["answers"] = {}
-
         if warning:
             session["quiz_notice"] = warning
         else:
@@ -88,28 +85,8 @@ def index():
 
 @quiz_bp.route("/quiz", methods=["GET", "POST"])
 def quiz():
-    all_questions: list[dict[str, Any]] = load_questions()
-    question_ids: list[str] = session.get("question_ids", [])
+    questions: list[dict[str, Any]] = session.get("questions", [])
     notice = session.pop("quiz_notice", None)
-
-    if not question_ids:
-        return redirect(url_for("quiz.index"))
-
-    questions = [
-        q for q in all_questions
-        if str(q["csv_id"]) in question_ids
-    ]
-
-    questions_by_id = {
-        str(q["csv_id"]): q
-        for q in questions
-    }
-
-    questions = [
-        questions_by_id[csv_id]
-        for csv_id in question_ids
-        if csv_id in questions_by_id
-    ]
 
     if not questions:
         return redirect(url_for("quiz.index"))
@@ -139,7 +116,6 @@ def quiz():
 
         score = sum(q["es_correcta"] for q in corrected_questions)
         total = len(corrected_questions)
-
         save_attempts(corrected_questions)
 
         return render_template(
@@ -150,6 +126,7 @@ def quiz():
         )
 
     return render_template("quiz.html", questions=questions, notice=notice)
+
 
 @quiz_bp.route("/reiniciar")
 def reiniciar():
