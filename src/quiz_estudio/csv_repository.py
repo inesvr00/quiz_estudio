@@ -23,6 +23,22 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip()).lower()
 
 
+def get_question_id(question: dict[str, Any]) -> int:
+    if "question_id" in question:
+        return int(question["question_id"])
+
+    return int(question["csv_id"])
+
+
+def get_questions_by_ids(
+    questions: list[dict[str, Any]],
+    question_ids: list[int],
+) -> list[dict[str, Any]]:
+    questions_by_id = {get_question_id(question): question for question in questions}
+
+    return [questions_by_id[question_id] for question_id in question_ids if question_id in questions_by_id]
+
+
 def load_questions() -> list[dict[str, Any]]:
     """
     Carga y valida las preguntas desde preguntas.csv.
@@ -51,6 +67,7 @@ def load_questions() -> list[dict[str, Any]]:
                 continue
 
             question = {
+                "question_id": index,
                 "csv_id": index,
                 "enunciado": row["enunciado"],
                 "opcion_1": row["opcion_1"],
@@ -89,7 +106,7 @@ def get_questions_by_topic_from_csv() -> dict[str, list[dict[str, Any]]]:
         if missing:
             raise ValueError(f"Faltan columnas en el CSV: {', '.join(sorted(missing))}")
 
-        for row in reader:
+        for index, row in enumerate(reader):
             enunciado = row.get("enunciado", "").strip()
             tema = row.get("tema", "").strip()
             respuesta_correcta = row.get("respuesta_correcta", "").strip()
@@ -106,6 +123,8 @@ def get_questions_by_topic_from_csv() -> dict[str, list[dict[str, Any]]]:
                 continue
 
             question = {
+                "question_id": index,
+                "csv_id": index,
                 "enunciado": enunciado,
                 "opcion_1": row.get("opcion_1", ""),
                 "opcion_2": row.get("opcion_2", ""),

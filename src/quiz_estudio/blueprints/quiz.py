@@ -5,12 +5,42 @@ from typing import Any
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from ..config import ALLOWED_BATCH_SIZES
-from ..csv_repository import get_topics, load_questions
+from ..csv_repository import get_question_id, get_questions_by_ids, get_topics, load_questions
 from ..services.quiz_service import select_quiz_questions
 from ..services.stats_service import save_attempts
 
 
 quiz_bp = Blueprint("quiz", __name__)
+
+
+def _get_question_ids() -> list[int]:
+    raw_question_ids = session.get("question_ids", [])
+
+    try:
+        return [int(question_id) for question_id in raw_question_ids]
+    except (TypeError, ValueError):
+        return []
+
+
+def _store_quiz_state(
+    selected_questions: list[dict[str, object]],
+    selected_topics: list[str],
+    batch_size: int,
+    warning: str | None,
+) -> None:
+    session["question_ids"] = [get_question_id(question) for question in selected_questions]
+    session["selected_topics"] = selected_topics
+    session["batch_size"] = batch_size
+    session.pop("questions", None)
+
+    if warning:
+        session["quiz_notice"] = warning
+    else:
+        session.pop("quiz_notice", None)
+
+
+def _clear_legacy_quiz_state() -> None:
+    session.pop("questions", None)
 
 
 def _parse_batch_size(form) -> tuple[int, str | None]:
@@ -41,6 +71,7 @@ def _parse_batch_size(form) -> tuple[int, str | None]:
 
 @quiz_bp.route("/", methods=["GET", "POST"])
 def index():
+    _clear_legacy_quiz_state()
     questions = load_questions()
     topics = get_topics(questions)
 
@@ -70,13 +101,7 @@ def index():
                 f"Se usará ese máximo."
             )
 
-        session["questions"] = selected_questions
-        session["selected_topics"] = selected_topics
-        session["batch_size"] = batch_size
-        if warning:
-            session["quiz_notice"] = warning
-        else:
-            session.pop("quiz_notice", None)
+        _store_quiz_state(selected_questions, selected_topics, batch_size, warning)
 
         return redirect(url_for("quiz.quiz"))
 
@@ -85,10 +110,19 @@ def index():
 
 @quiz_bp.route("/quiz", methods=["GET", "POST"])
 def quiz():
-    questions: list[dict[str, Any]] = session.get("questions", [])
+    _clear_legacy_quiz_state()
+    questions = load_questions()
+    question_ids = _get_question_ids()
     notice = session.pop("quiz_notice", None)
 
-    if not questions:
+    if not question_ids:
+        return redirect(url_for("quiz.index"))
+
+    questions = get_questions_by_ids(questions, question_ids)
+
+    if len(questions) != len(question_ids):
+        session.pop("question_ids", None)
+        session.pop("questions", None)
         return redirect(url_for("quiz.index"))
 
     if request.method == "POST":
@@ -136,10 +170,11 @@ def reiniciar():
 
 @quiz_bp.route("/otra-mas")
 def otra_mas():
+    _clear_legacy_quiz_state()
     questions = load_questions()
 
     selected_topics = session.get("selected_topics", [])
-    batch_size = session.get("batch_size", 10)
+    batch_size = int(session.get("batch_size", 10))
 
     if not selected_topics:
         return redirect(url_for("quiz.index"))
@@ -153,6 +188,6 @@ def otra_mas():
     if not selected_questions:
         return redirect(url_for("quiz.index"))
 
-    session["questions"] = selected_questions
+    _store_quiz_state(selected_questions, selected_topics, batch_size, None)
 
     return redirect(url_for("quiz.quiz"))

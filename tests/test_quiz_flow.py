@@ -8,6 +8,7 @@ from quiz_estudio import create_app
 def _build_questions(count: int = 73) -> list[dict[str, object]]:
     return [
         {
+            "question_id": index,
             "csv_id": index,
             "enunciado": f"Pregunta {index}",
             "opcion_1": "A",
@@ -66,10 +67,13 @@ def _start_quiz(client, data):
     ],
 )
 def test_quiz_quick_sizes_work(client, quiz_size_mode, expected_count):
-    _start_quiz(client, {"quiz_size_mode": quiz_size_mode})
+    response = _start_quiz(client, {"quiz_size_mode": quiz_size_mode})
 
     with client.session_transaction() as session_data:
-        assert len(session_data["questions"]) == expected_count
+        assert len(session_data["question_ids"]) == expected_count
+        assert "questions" not in session_data
+
+    assert b"Terminar y corregir" in response.data
 
 
 def test_quiz_custom_size_overrides_quick_choice(client):
@@ -79,7 +83,8 @@ def test_quiz_custom_size_overrides_quick_choice(client):
     )
 
     with client.session_transaction() as session_data:
-        assert len(session_data["questions"]) == 35
+        assert len(session_data["question_ids"]) == 35
+        assert "questions" not in session_data
 
 
 def test_quiz_invalid_custom_falls_back_to_quick_choice(client):
@@ -89,7 +94,8 @@ def test_quiz_invalid_custom_falls_back_to_quick_choice(client):
     )
 
     with client.session_transaction() as session_data:
-        assert len(session_data["questions"]) == 10
+        assert len(session_data["question_ids"]) == 10
+        assert "questions" not in session_data
 
     assert b"entero mayor que 0" in response.data
 
@@ -101,7 +107,8 @@ def test_quiz_limits_to_available_questions(client):
     )
 
     with client.session_transaction() as session_data:
-        assert len(session_data["questions"]) == 73
+        assert len(session_data["question_ids"]) == 73
+        assert "questions" not in session_data
 
     assert b"Solo hay 73 preguntas disponibles" in response.data
 
@@ -110,11 +117,24 @@ def test_quiz_results_page_works(client):
     _start_quiz(client, {"quiz_size_mode": "10"})
 
     with client.session_transaction() as session_data:
-        questions = session_data["questions"]
+        question_ids = session_data["question_ids"]
 
-    answers = {f"pregunta_{question['csv_id']}": "1" for question in questions}
+    answers = {f"pregunta_{question_id}": "1" for question_id in question_ids}
     response = client.post("/quiz", data=answers, follow_redirects=True)
 
     assert response.status_code == 200
     assert b"Correcci" in response.data
     assert b"Resultado:" in response.data
+
+
+def test_otra_mas_rebuilds_questions_from_ids(client):
+    _start_quiz(client, {"quiz_size_mode": "10"})
+
+    response = client.get("/otra-mas", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"Terminar y corregir" in response.data
+
+    with client.session_transaction() as session_data:
+        assert len(session_data["question_ids"]) == 10
+        assert "questions" not in session_data
