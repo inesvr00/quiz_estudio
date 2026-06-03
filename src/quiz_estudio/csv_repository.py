@@ -19,29 +19,29 @@ REQUIRED_COLUMNS = {
     "tema",
 }
 
+PUNCT_TRANSLATION_TABLE = str.maketrans(
+    {
+        '"': " ",
+        "'": " ",
+        "‘": " ",
+        "’": " ",
+        "‚": " ",
+        "‛": " ",
+        "“": " ",
+        "”": " ",
+        "„": " ",
+        "‟": " ",
+        "«": " ",
+        "»": " ",
+        "´": " ",
+        "`": " ",
+    }
+)
+
 
 def normalize_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text)
-    normalized = normalized.translate(
-        str.maketrans(
-            {
-                '"': " ",
-                "'": " ",
-                "‘": " ",
-                "’": " ",
-                "‚": " ",
-                "‛": " ",
-                "“": " ",
-                "”": " ",
-                "„": " ",
-                "‟": " ",
-                "«": " ",
-                "»": " ",
-                "´": " ",
-                "`": " ",
-            }
-        )
-    )
+    normalized = normalized.translate(PUNCT_TRANSLATION_TABLE)
     normalized = normalized.lower()
     normalized = unicodedata.normalize("NFKD", normalized)
     normalized = "".join(

@@ -41,45 +41,99 @@ def normalize_enunciado(enunciado: str) -> str:
     return normalize_text(enunciado)
 
 
-def _extract_sensitive_markers(text: str) -> list[str]:
-    return sorted(set(normalize_text(text).split()) & SENSITIVE_MARKERS)
+def _extract_sensitive_markers(normalized_text: str) -> list[str]:
+    return sorted(set(normalized_text.split()) & SENSITIVE_MARKERS)
+
+
+def build_question_match_index(existing_questions: list[str]) -> list[dict[str, object]]:
+    return [
+        {
+            "original": original_question,
+            "normalized": normalized_question,
+            "index": index,
+            "sensitive_markers": _extract_sensitive_markers(normalized_question),
+        }
+        for index, original_question in enumerate(existing_questions)
+        for normalized_question in [normalize_text(original_question)]
+    ]
+
+
+def _build_question_match_lookup(
+    existing_question_index: list[dict[str, object]],
+) -> dict[str, dict[str, object]]:
+    return {
+        entry["normalized"]: entry
+        for entry in existing_question_index
+    }
+
+
+def _coerce_question_index(
+    existing_question_index: list[dict[str, object]] | list[str],
+) -> list[dict[str, object]]:
+    if not existing_question_index:
+        return []
+
+    first_entry = existing_question_index[0]
+    if isinstance(first_entry, dict):
+        return existing_question_index  # type: ignore[return-value]
+
+    return build_question_match_index(existing_question_index)  # type: ignore[arg-type]
 
 
 def find_best_question_match(
     new_question: str,
-    existing_questions: list[str],
+    existing_question_index: list[dict[str, object]] | list[str],
+    normalized_existing_questions: list[str] | None = None,
+    score_cutoff: float = review_threshold,
 ) -> dict[str, object] | None:
-    if not existing_questions:
+    existing_question_index = _coerce_question_index(existing_question_index)
+    if not existing_question_index:
         return None
 
+    normalized_new_question = normalize_text(new_question)
+    normalized_choices = (
+        normalized_existing_questions
+        if normalized_existing_questions is not None
+        else [entry["normalized"] for entry in existing_question_index]
+    )
+
     best_match = process.extractOne(
-        new_question,
-        existing_questions,
+        normalized_new_question,
+        normalized_choices,
         scorer=fuzz.token_set_ratio,
-        processor=normalize_text,
+        score_cutoff=score_cutoff,
     )
 
     if best_match is None:
         return None
 
-    matched_question, score, _ = best_match
+    matched_normalized_question, score, matched_index = best_match
+    matched_entry = existing_question_index[matched_index]
     return {
-        "question": matched_question,
+        "question": matched_entry["original"],
         "score": float(score),
-        "normalized_question": normalize_text(matched_question),
-        "new_normalized_question": normalize_text(new_question),
-        "sensitive_markers": _extract_sensitive_markers(matched_question),
-        "new_sensitive_markers": _extract_sensitive_markers(new_question),
+        "normalized_question": matched_normalized_question,
+        "new_normalized_question": normalized_new_question,
+        "index": int(matched_entry["index"]),
+        "sensitive_markers": matched_entry["sensitive_markers"],
+        "new_sensitive_markers": _extract_sensitive_markers(normalized_new_question),
     }
 
 
 def classify_import_question(
     new_question: str,
-    existing_questions: list[str],
+    existing_question_index: list[dict[str, object]] | list[str],
     duplicate_threshold: float = duplicate_threshold,
     review_threshold: float = review_threshold,
+    normalized_existing_questions: list[str] | None = None,
 ) -> tuple[str, dict[str, object] | None]:
-    best_match = find_best_question_match(new_question, existing_questions)
+    existing_question_index = _coerce_question_index(existing_question_index)
+    best_match = find_best_question_match(
+        new_question,
+        existing_question_index,
+        normalized_existing_questions=normalized_existing_questions,
+        score_cutoff=review_threshold,
+    )
     if best_match is None:
         return "new", None
 
@@ -121,10 +175,6 @@ def validate_main_csv_rows() -> list[dict[str, str]]:
         )
 
     return rows
-
-
-def load_existing_question_texts() -> list[str]:
-    return [row["enunciado"] for row in validate_main_csv_rows()]
 
 
 def validate_header(fieldnames: list[str] | None) -> None:
@@ -189,8 +239,14 @@ def ensure_csv_ends_with_newline() -> None:
 
 
 def preview_questions_from_text(csv_text: str) -> dict[str, object]:
-    existing_question_texts = load_existing_question_texts()
-    existing_questions = {normalize_enunciado(question) for question in existing_question_texts}
+    existing_rows = validate_main_csv_rows()
+    existing_question_index = build_question_match_index(
+        [row["enunciado"] for row in existing_rows]
+    )
+    normalized_existing_questions = [
+        entry["normalized"] for entry in existing_question_index
+    ]
+    existing_question_lookup = _build_question_match_lookup(existing_question_index)
     valid_rows = []
     duplicates = []
     review_rows = []
@@ -219,13 +275,14 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
             enunciado = cleaned["enunciado"]
             normalized_enunciado = normalize_enunciado(enunciado)
 
-            if normalized_enunciado in existing_questions:
+            existing_match = existing_question_lookup.get(normalized_enunciado)
+            if existing_match is not None:
                 duplicates.append(
                     {
                         "row_number": row_number,
                         "enunciado": enunciado,
                         "tema": cleaned["tema"],
-                        "matched_question": enunciado,
+                        "matched_question": existing_match["original"],
                         "similarity": 100.0,
                     }
                 )
@@ -233,7 +290,8 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
 
             classification, best_match = classify_import_question(
                 enunciado,
-                existing_question_texts,
+                existing_question_index,
+                normalized_existing_questions=normalized_existing_questions,
             )
 
             if classification == "duplicate":
@@ -267,8 +325,17 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
                     **cleaned,
                 }
             )
-            existing_questions.add(normalized_enunciado)
-            existing_question_texts.append(enunciado)
+            new_index_entry = {
+                "original": enunciado,
+                "normalized": normalized_enunciado,
+                "index": len(existing_question_index),
+                "sensitive_markers": _extract_sensitive_markers(
+                    normalized_enunciado
+                ),
+            }
+            existing_question_index.append(new_index_entry)
+            normalized_existing_questions.append(normalized_enunciado)
+            existing_question_lookup[normalized_enunciado] = new_index_entry
 
     return {
         "total_read": total_read,

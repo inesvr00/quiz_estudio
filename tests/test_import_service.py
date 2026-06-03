@@ -48,7 +48,7 @@ def test_classify_import_question_detects_exact_duplicate() -> None:
 def test_classify_import_question_ignores_format_differences() -> None:
     classification, match = import_service.classify_import_question(
         '  "Capital   de   Francia"  ',
-        ["Capital de Francia"],
+        import_service.build_question_match_index(["Capital de Francia"]),
     )
 
     assert classification == "duplicate"
@@ -56,10 +56,40 @@ def test_classify_import_question_ignores_format_differences() -> None:
     assert match["score"] == 100.0
 
 
+def test_find_best_question_match_works_with_pre_normalized_index() -> None:
+    question_index = import_service.build_question_match_index([
+        "Capital de Francia",
+        "La capital de Francia es Paris",
+    ])
+
+    match = import_service.find_best_question_match(
+        '  "Capital   de   Francia"  ',
+        question_index,
+        normalized_existing_questions=[entry["normalized"] for entry in question_index],
+    )
+
+    assert match is not None
+    assert match["question"] == "Capital de Francia"
+    assert match["score"] == 100.0
+
+
+def test_classify_import_question_returns_new_for_distinct_question() -> None:
+    classification, match = import_service.classify_import_question(
+        "Que color tiene el cielo en un dia despejado?",
+        import_service.build_question_match_index([
+            "Capital de Francia",
+            "La capital de Francia es Paris",
+        ]),
+    )
+
+    assert classification == "new"
+    assert match is None
+
+
 def test_classify_import_question_marks_similar_question_for_review() -> None:
     classification, match = import_service.classify_import_question(
         "La capital de Francia es Madrid",
-        ["La capital de Francia es Paris"],
+        import_service.build_question_match_index(["La capital de Francia es Paris"]),
     )
 
     assert classification == "review"
@@ -70,12 +100,23 @@ def test_classify_import_question_marks_similar_question_for_review() -> None:
 def test_classify_import_question_handles_sensitive_negation_with_caution() -> None:
     classification, match = import_service.classify_import_question(
         "Cual NO es la capital de Francia?",
-        ["Cual es la capital de Francia?"],
+        import_service.build_question_match_index(["Cual es la capital de Francia?"]),
     )
 
     assert classification == "review"
     assert match is not None
     assert "no" in match["new_sensitive_markers"]
+
+
+@pytest.mark.parametrize("keyword", ["NO", "EXCEPTO", "incorrecta", "falsa"])
+def test_sensitive_words_force_review(keyword: str) -> None:
+    classification, match = import_service.classify_import_question(
+        f"Cual {keyword} es la capital de Francia?",
+        import_service.build_question_match_index(["Cual es la capital de Francia?"]),
+    )
+
+    assert classification == "review"
+    assert match is not None
 
 
 def test_preview_questions_reports_review_rows(isolated_csv) -> None:
@@ -90,3 +131,22 @@ def test_preview_questions_reports_review_rows(isolated_csv) -> None:
     assert len(preview["duplicates"]) == 0
     assert len(preview["review"]) == 1
     assert preview["review"][0]["matched_question"]
+
+
+def test_preview_builds_match_index_once(isolated_csv, monkeypatch) -> None:
+    calls = {"count": 0}
+    original_builder = import_service.build_question_match_index
+
+    def wrapped_builder(existing_questions):
+        calls["count"] += 1
+        return original_builder(existing_questions)
+
+    monkeypatch.setattr(import_service, "build_question_match_index", wrapped_builder)
+
+    import_service.preview_questions_from_text(
+        CSV_HEADER
+        + "Nueva pregunta 1,A,B,C,D,1,Explicacion,General\n"
+        + "Nueva pregunta 2,A,B,C,D,1,Explicacion,General\n"
+    )
+
+    assert calls["count"] == 1
