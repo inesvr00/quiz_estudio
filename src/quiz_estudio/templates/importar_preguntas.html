@@ -38,12 +38,16 @@
             <strong>{{ preview.total_read }}</strong>
         </div>
         <div class="stat-card">
-            <span>Válidas</span>
+            <span>Importables</span>
             <strong>{{ preview.valid|length }}</strong>
         </div>
         <div class="stat-card">
             <span>Duplicadas</span>
             <strong>{{ preview.duplicates|length }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>Revisión</span>
+            <strong>{{ preview.review|length }}</strong>
         </div>
         <div class="stat-card">
             <span>Con errores</span>
@@ -91,6 +95,7 @@
                             <th>Fila</th>
                             <th>Pregunta</th>
                             <th>Tema</th>
+                            <th>Coincidencia</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -99,6 +104,7 @@
                                 <td>{{ q.row_number }}</td>
                                 <td>{{ q.enunciado }}</td>
                                 <td>{{ q.tema }}</td>
+                                <td>{{ q.similarity|round(1) }}%</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -106,6 +112,46 @@
             </div>
         {% else %}
             <p class="hint">No se detectaron duplicados.</p>
+        {% endif %}
+    </section>
+
+    <section class="card">
+        <h2>Preguntas para revisión</h2>
+        {% if preview.review %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fila</th>
+                            <th>Nueva pregunta</th>
+                            <th>Más parecida</th>
+                            <th>Coincidencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for q in preview.review %}
+                            <tr>
+                                <td>{{ q.row_number }}</td>
+                                <td>
+                                    <div>{{ q.enunciado }}</div>
+                                    {% if q.new_sensitive_markers %}
+                                        <small class="hint">Sensibles: {{ q.new_sensitive_markers|join(', ') }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div>{{ q.matched_question }}</div>
+                                    {% if q.matched_sensitive_markers %}
+                                        <small class="hint">Sensibles: {{ q.matched_sensitive_markers|join(', ') }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ q.similarity|round(1) }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="hint">No hay preguntas pendientes de revisión.</p>
         {% endif %}
     </section>
 

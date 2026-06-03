@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import csv
 import io
-import re
 import shutil
 from datetime import datetime
 from pathlib import Path
 
+from rapidfuzz import fuzz, process
+
 from ..config import BACKUP_DIR, CSV_PATH
+from ..csv_repository import normalize_text
 
 
 EXPECTED_COLUMNS = [
@@ -30,9 +32,69 @@ REQUIRED_NON_EMPTY = [
     "tema",
 ]
 
+duplicate_threshold = 92.0
+review_threshold = 82.0
+SENSITIVE_MARKERS = {"no", "excepto", "incorrecta", "falsa", "verdadera"}
+
 
 def normalize_enunciado(enunciado: str) -> str:
-    return re.sub(r"\s+", " ", enunciado.strip()).lower()
+    return normalize_text(enunciado)
+
+
+def _extract_sensitive_markers(text: str) -> list[str]:
+    return sorted(set(normalize_text(text).split()) & SENSITIVE_MARKERS)
+
+
+def find_best_question_match(
+    new_question: str,
+    existing_questions: list[str],
+) -> dict[str, object] | None:
+    if not existing_questions:
+        return None
+
+    best_match = process.extractOne(
+        new_question,
+        existing_questions,
+        scorer=fuzz.token_set_ratio,
+        processor=normalize_text,
+    )
+
+    if best_match is None:
+        return None
+
+    matched_question, score, _ = best_match
+    return {
+        "question": matched_question,
+        "score": float(score),
+        "normalized_question": normalize_text(matched_question),
+        "new_normalized_question": normalize_text(new_question),
+        "sensitive_markers": _extract_sensitive_markers(matched_question),
+        "new_sensitive_markers": _extract_sensitive_markers(new_question),
+    }
+
+
+def classify_import_question(
+    new_question: str,
+    existing_questions: list[str],
+    duplicate_threshold: float = duplicate_threshold,
+    review_threshold: float = review_threshold,
+) -> tuple[str, dict[str, object] | None]:
+    best_match = find_best_question_match(new_question, existing_questions)
+    if best_match is None:
+        return "new", None
+
+    score = float(best_match["score"])
+    new_markers = set(best_match["new_sensitive_markers"])
+    matched_markers = set(best_match["sensitive_markers"])
+    sensitive_mismatch = bool(new_markers ^ matched_markers)
+
+    if score >= duplicate_threshold and not sensitive_mismatch:
+        return "duplicate", best_match
+
+    if score >= review_threshold or sensitive_mismatch:
+        return "review", best_match
+
+    return "new", None
 
 
 def validate_main_csv_rows() -> list[dict[str, str]]:
@@ -61,11 +123,8 @@ def validate_main_csv_rows() -> list[dict[str, str]]:
     return rows
 
 
-def read_existing_questions() -> set[str]:
-    return {
-        normalize_enunciado(row["enunciado"])
-        for row in validate_main_csv_rows()
-    }
+def load_existing_question_texts() -> list[str]:
+    return [row["enunciado"] for row in validate_main_csv_rows()]
 
 
 def validate_header(fieldnames: list[str] | None) -> None:
@@ -130,9 +189,11 @@ def ensure_csv_ends_with_newline() -> None:
 
 
 def preview_questions_from_text(csv_text: str) -> dict[str, object]:
-    existing_questions = read_existing_questions()
+    existing_question_texts = load_existing_question_texts()
+    existing_questions = {normalize_enunciado(question) for question in existing_question_texts}
     valid_rows = []
     duplicates = []
+    review_rows = []
     errors = []
     total_read = 0
 
@@ -164,6 +225,38 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
                         "row_number": row_number,
                         "enunciado": enunciado,
                         "tema": cleaned["tema"],
+                        "matched_question": enunciado,
+                        "similarity": 100.0,
+                    }
+                )
+                continue
+
+            classification, best_match = classify_import_question(
+                enunciado,
+                existing_question_texts,
+            )
+
+            if classification == "duplicate":
+                duplicates.append(
+                    {
+                        "row_number": row_number,
+                        "enunciado": enunciado,
+                        "tema": cleaned["tema"],
+                        "matched_question": best_match["question"] if best_match else enunciado,
+                        "similarity": best_match["score"] if best_match else 100.0,
+                    }
+                )
+                continue
+
+            if classification == "review":
+                review_rows.append(
+                    {
+                        "row_number": row_number,
+                        **cleaned,
+                        "matched_question": best_match["question"] if best_match else "",
+                        "similarity": best_match["score"] if best_match else 0.0,
+                        "new_sensitive_markers": best_match["new_sensitive_markers"] if best_match else [],
+                        "matched_sensitive_markers": best_match["sensitive_markers"] if best_match else [],
                     }
                 )
                 continue
@@ -175,11 +268,13 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
                 }
             )
             existing_questions.add(normalized_enunciado)
+            existing_question_texts.append(enunciado)
 
     return {
         "total_read": total_read,
         "valid": valid_rows,
         "duplicates": duplicates,
+        "review": review_rows,
         "errors": errors,
     }
 
@@ -246,12 +341,25 @@ def import_questions(import_path: Path) -> int:
 
     print("Resumen de importacion")
     print(f"- preguntas leidas: {preview['total_read']}")
-    print(f"- preguntas anadidas: {len(rows_to_add)}")
+    print(f"- preguntas importadas: {len(rows_to_add)}")
     print(f"- duplicadas ignoradas: {len(preview['duplicates'])}")
+    print(f"- pendientes de revision: {len(preview['review'])}")
     print(f"- filas con errores: {len(preview['errors'])}")
 
     if backup_path:
         print(f"- copia de seguridad: {backup_path}")
+
+    if preview["review"]:
+        print("\nPendientes de revision:")
+        for row in preview["review"]:
+            print(
+                "- Fila {row_number}: {enunciado} | similar a: {matched_question} | similitud: {similarity:.1f}%".format(
+                    row_number=row["row_number"],
+                    enunciado=row["enunciado"],
+                    matched_question=row["matched_question"],
+                    similarity=float(row["similarity"]),
+                )
+            )
 
     if preview["errors"]:
         print("\nErrores:")

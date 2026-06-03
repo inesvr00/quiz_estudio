@@ -34,6 +34,9 @@ def importar_preguntas():
                     if valid_rows
                     else "No habia preguntas validas nuevas para importar."
                 )
+                success = (
+                    f"{success} Se omitieron {len(preview['duplicates'])} duplicadas y {len(preview['review'])} quedaron para revision."
+                )
                 if backup_path:
                     success = f"{success} Backup creado: {backup_path}"
 

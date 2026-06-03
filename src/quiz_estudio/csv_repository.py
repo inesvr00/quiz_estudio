@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import re
+import unicodedata
 from typing import Any
 
 from .config import CSV_PATH
@@ -20,7 +21,34 @@ REQUIRED_COLUMNS = {
 
 
 def normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text.strip()).lower()
+    normalized = unicodedata.normalize("NFKC", text)
+    normalized = normalized.translate(
+        str.maketrans(
+            {
+                '"': " ",
+                "'": " ",
+                "‘": " ",
+                "’": " ",
+                "‚": " ",
+                "‛": " ",
+                "“": " ",
+                "”": " ",
+                "„": " ",
+                "‟": " ",
+                "«": " ",
+                "»": " ",
+                "´": " ",
+                "`": " ",
+            }
+        )
+    )
+    normalized = normalized.lower()
+    normalized = unicodedata.normalize("NFKD", normalized)
+    normalized = "".join(
+        character for character in normalized if not unicodedata.combining(character)
+    )
+    normalized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def get_question_id(question: dict[str, Any]) -> int:
