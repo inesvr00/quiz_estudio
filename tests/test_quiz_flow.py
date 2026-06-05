@@ -18,9 +18,19 @@ def _build_questions(count: int = 73) -> list[dict[str, object]]:
             "respuesta_correcta": 1,
             "explicacion": "Explicacion",
             "tema": "Tema unico",
+            "teoria": index % 2,
         }
         for index in range(count)
     ]
+
+
+def _build_practical_only_questions(count: int = 10) -> list[dict[str, object]]:
+    questions = _build_questions(count)
+
+    for question in questions:
+        question["teoria"] = 0
+
+    return questions
 
 
 class _FakeRepository:
@@ -87,6 +97,34 @@ def test_quiz_custom_size_overrides_quick_choice(client):
         assert "questions" not in session_data
 
 
+def test_quiz_theory_mode_filters_questions(client):
+    response = _start_quiz(
+        client,
+        {"quiz_size_mode": "10", "quiz_mode": "theory"},
+    )
+
+    with client.session_transaction() as session_data:
+        assert session_data["quiz_mode"] == "theory"
+        assert len(session_data["question_ids"]) == 10
+        assert all(question_id % 2 == 1 for question_id in session_data["question_ids"])
+
+    assert b"Terminar y corregir" in response.data
+
+
+def test_quiz_practical_mode_filters_questions(client):
+    response = _start_quiz(
+        client,
+        {"quiz_size_mode": "10", "quiz_mode": "practical"},
+    )
+
+    with client.session_transaction() as session_data:
+        assert session_data["quiz_mode"] == "practical"
+        assert len(session_data["question_ids"]) == 10
+        assert all(question_id % 2 == 0 for question_id in session_data["question_ids"])
+
+    assert b"Terminar y corregir" in response.data
+
+
 def test_quiz_invalid_custom_falls_back_to_quick_choice(client):
     response = _start_quiz(
         client,
@@ -111,6 +149,26 @@ def test_quiz_limits_to_available_questions(client):
         assert "questions" not in session_data
 
     assert b"Solo hay 73 preguntas disponibles" in response.data
+
+
+def test_quiz_shows_clear_error_when_topics_and_mode_are_empty(client, monkeypatch):
+    monkeypatch.setattr("quiz_estudio.blueprints.quiz.load_questions", lambda: _build_practical_only_questions())
+
+    response = client.post(
+        "/",
+        data={
+            "quiz_mode": "theory",
+            "temas": "Tema unico",
+            "quiz_size_mode": "10",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"No hay preguntas para los temas y modo seleccionados." in response.data
+    with client.session_transaction() as session_data:
+        assert "question_ids" not in session_data
+        assert session_data.get("quiz_mode") is None
 
 
 def test_quiz_results_page_works(client):

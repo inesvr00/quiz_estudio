@@ -6,7 +6,12 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 
 from ..config import ALLOWED_BATCH_SIZES
 from ..csv_repository import get_question_id, get_questions_by_ids, get_topics, load_questions
-from ..services.quiz_service import select_quiz_questions
+from ..services.quiz_service import (
+    QUIZ_MODE_PRACTICAL,
+    QUIZ_MODE_STANDARD,
+    QUIZ_MODE_THEORY,
+    select_quiz_questions,
+)
 from ..services.stats_service import save_attempts
 
 
@@ -26,11 +31,13 @@ def _store_quiz_state(
     selected_questions: list[dict[str, object]],
     selected_topics: list[str],
     batch_size: int,
+    quiz_mode: str,
     warning: str | None,
 ) -> None:
     session["question_ids"] = [get_question_id(question) for question in selected_questions]
     session["selected_topics"] = selected_topics
     session["batch_size"] = batch_size
+    session["quiz_mode"] = quiz_mode
     session.pop("questions", None)
 
     if warning:
@@ -69,6 +76,15 @@ def _parse_batch_size(form) -> tuple[int, str | None]:
     return selected_size, None
 
 
+def _parse_quiz_mode(form) -> str:
+    mode = (form.get("quiz_mode") or QUIZ_MODE_STANDARD).strip()
+
+    if mode not in {QUIZ_MODE_STANDARD, QUIZ_MODE_THEORY, QUIZ_MODE_PRACTICAL}:
+        return QUIZ_MODE_STANDARD
+
+    return mode
+
+
 @quiz_bp.route("/", methods=["GET", "POST"])
 def index():
     _clear_legacy_quiz_state()
@@ -78,6 +94,7 @@ def index():
     if request.method == "POST":
         selected_topics = request.form.getlist("temas")
         batch_size, warning = _parse_batch_size(request.form)
+        quiz_mode = _parse_quiz_mode(request.form)
 
         if not selected_topics:
             selected_topics = topics
@@ -86,13 +103,17 @@ def index():
             questions,
             selected_topics,
             batch_size,
+            quiz_mode,
         )
 
         if not selected_questions:
             return render_template(
                 "index.html",
                 topics=topics,
-                error="No hay preguntas para los temas seleccionados.",
+                selected_topics=selected_topics,
+                selected_batch_size=str(batch_size),
+                selected_quiz_mode=quiz_mode,
+                error="No hay preguntas para los temas y modo seleccionados.",
             )
 
         if batch_size > len(selected_questions):
@@ -101,11 +122,17 @@ def index():
                 f"Se usará ese máximo."
             )
 
-        _store_quiz_state(selected_questions, selected_topics, batch_size, warning)
+        _store_quiz_state(selected_questions, selected_topics, batch_size, quiz_mode, warning)
 
         return redirect(url_for("quiz.quiz"))
 
-    return render_template("index.html", topics=topics)
+    return render_template(
+        "index.html",
+        topics=topics,
+        selected_topics=[],
+        selected_batch_size="10",
+        selected_quiz_mode=QUIZ_MODE_STANDARD,
+    )
 
 
 @quiz_bp.route("/quiz", methods=["GET", "POST"])
@@ -175,6 +202,7 @@ def otra_mas():
 
     selected_topics = session.get("selected_topics", [])
     batch_size = int(session.get("batch_size", 10))
+    quiz_mode = session.get("quiz_mode", QUIZ_MODE_STANDARD)
 
     if not selected_topics:
         return redirect(url_for("quiz.index"))
@@ -183,11 +211,12 @@ def otra_mas():
         questions,
         selected_topics,
         batch_size,
+        quiz_mode,
     )
 
     if not selected_questions:
         return redirect(url_for("quiz.index"))
 
-    _store_quiz_state(selected_questions, selected_topics, batch_size, None)
+    _store_quiz_state(selected_questions, selected_topics, batch_size, quiz_mode, None)
 
     return redirect(url_for("quiz.quiz"))

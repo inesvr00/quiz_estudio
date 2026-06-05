@@ -17,6 +17,7 @@ REQUIRED_COLUMNS = {
     "respuesta_correcta",
     "explicacion",
     "tema",
+    "teoria",
 }
 
 PUNCT_TRANSLATION_TABLE = str.maketrans(
@@ -73,7 +74,7 @@ def load_questions() -> list[dict[str, Any]]:
 
     El CSV debe tener las columnas:
     enunciado, opcion_1, opcion_2, opcion_3, opcion_4,
-    respuesta_correcta, explicacion, tema
+    respuesta_correcta, explicacion, tema, teoria
     """
     if not CSV_PATH.exists():
         raise FileNotFoundError(f"No se encontro el archivo {CSV_PATH}")
@@ -105,6 +106,7 @@ def load_questions() -> list[dict[str, Any]]:
                 "respuesta_correcta": int(row["respuesta_correcta"]),
                 "explicacion": row["explicacion"],
                 "tema": row["tema"],
+                "teoria": int(row["teoria"] or 0),
             }
 
             questions.append(question)
@@ -161,6 +163,7 @@ def get_questions_by_topic_from_csv() -> dict[str, list[dict[str, Any]]]:
                 "respuesta_correcta": respuesta_correcta_int,
                 "explicacion": row.get("explicacion", ""),
                 "tema": tema,
+                "teoria": int(row.get("teoria", "0") or 0),
             }
 
             questions_by_topic.setdefault(tema, []).append(question)

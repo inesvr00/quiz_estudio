@@ -6,6 +6,11 @@ from typing import Any
 from ..db import get_attempt_repository
 
 
+QUIZ_MODE_STANDARD = "standard"
+QUIZ_MODE_THEORY = "theory"
+QUIZ_MODE_PRACTICAL = "practical"
+
+
 def get_seen_question_ids() -> set[int]:
     return get_attempt_repository().get_seen_question_ids()
 
@@ -39,12 +44,18 @@ def select_quiz_questions(
     questions: list[dict[str, Any]],
     selected_topics: list[str],
     batch_size: int,
+    quiz_mode: str = QUIZ_MODE_STANDARD,
 ) -> list[dict[str, Any]]:
     filtered_questions = [
         question
         for question in questions
         if question["tema"] in selected_topics
     ]
+
+    if quiz_mode == QUIZ_MODE_THEORY:
+        filtered_questions = [question for question in filtered_questions if int(question.get("teoria", 0)) == 1]
+    elif quiz_mode == QUIZ_MODE_PRACTICAL:
+        filtered_questions = [question for question in filtered_questions if int(question.get("teoria", 0)) == 0]
 
     if not filtered_questions:
         return []
