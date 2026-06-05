@@ -1,14 +1,75 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="card">
-    <h1>Quiz de estudio</h1>
-    <p>Elige los temas que quieres practicar y cuántas preguntas quieres responder antes de corregir.</p>
+{% macro lucide_icon(name) -%}
+    <svg class="lucide-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        {%- if name == 'graduation-cap' -%}
+            <path d="M22 10 12 5 2 10l10 5 10-5Z"></path><path d="M6 12v5c3 2 9 2 12 0v-5"></path><path d="M22 10v6"></path>
+        {%- elif name == 'zap' -%}
+            <path d="M13 2 3 14h8l-1 8 11-13h-8l1-7Z"></path>
+        {%- elif name == 'cross' -%}
+            <path d="M12 2v20"></path><path d="M5 9h14"></path><path d="M7 22h10"></path>
+        {%- elif name == 'radiation' -%}
+            <circle cx="12" cy="12" r="2"></circle><path d="M12 2v7"></path><path d="m4.9 18 6.1-3.5"></path><path d="m19.1 18-6.1-3.5"></path><path d="M8.5 5.9A8 8 0 0 1 12 5"></path><path d="M18.9 15.5A8 8 0 0 1 17 18"></path><path d="M5.1 15.5A8 8 0 0 0 7 18"></path>
+        {%- elif name == 'radar' -%}
+            <path d="M19.1 4.9A10 10 0 1 1 4.9 19.1"></path><path d="M14 10a4 4 0 1 1-4 4"></path><path d="M12 12 21 3"></path><path d="M20 8V3h-5"></path>
+        {%- elif name == 'magnet' -%}
+            <path d="M6 15a6 6 0 0 0 12 0V5h-4v10a2 2 0 0 1-4 0V5H6v10Z"></path><path d="M6 9h4"></path><path d="M14 9h4"></path>
+        {%- elif name == 'circuit-board' -%}
+            <rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h.01"></path><path d="M15 9h.01"></path><path d="M9 15h.01"></path><path d="M15 15h.01"></path><path d="M9 9v6h6"></path><path d="M15 9v6"></path>
+        {%- elif name == 'chart-column' -%}
+            <path d="M4 20h16"></path><path d="M7 16V9"></path><path d="M12 16V4"></path><path d="M17 16v-6"></path>
+        {%- elif name == 'atom' -%}
+            <circle cx="12" cy="12" r="1"></circle><ellipse cx="12" cy="12" rx="9" ry="4"></ellipse><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(60 12 12)"></ellipse><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(120 12 12)"></ellipse>
+        {%- elif name == 'molecule' -%}
+            <circle cx="7" cy="8" r="3"></circle><circle cx="17" cy="8" r="3"></circle><circle cx="12" cy="17" r="3"></circle><path d="m10 10 2 4"></path><path d="m14 10-2 4"></path><path d="M10 8h4"></path>
+        {%- elif name == 'orbit' -%}
+            <circle cx="12" cy="12" r="2"></circle><path d="M20 6c2 3-1 8-6 11s-10 3-11 0 1-8 6-11 10-3 11 0Z"></path><path d="M4 6c-2 3 1 8 6 11s10 3 11 0-1-8-6-11S5 3 4 6Z"></path>
+        {%- elif name == 'target' -%}
+            <circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M2 12h4"></path><path d="M18 12h4"></path>
+        {%- elif name == 'scan' -%}
+            <path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M7 12h10"></path>
+        {%- elif name == 'scatter' -%}
+            <circle cx="7" cy="7" r="2"></circle><circle cx="17" cy="7" r="2"></circle><circle cx="9" cy="17" r="2"></circle><circle cx="18" cy="16" r="2"></circle><path d="m9 8 6 6"></path><path d="m15 8-4 7"></path>
+        {%- elif name == 'grid-3x3' -%}
+            <path d="M4 4h16v16H4z"></path><path d="M4 9.33h16"></path><path d="M4 14.67h16"></path><path d="M9.33 4v16"></path><path d="M14.67 4v16"></path>
+        {%- elif name == 'terminal' -%}
+            <path d="m4 7 5 5-5 5"></path><path d="M12 19h8"></path>
+        {%- elif name == 'ruler' -%}
+            <path d="m16 2 6 6L8 22l-6-6L16 2Z"></path><path d="m7.5 10.5 2 2"></path><path d="m10.5 7.5 2 2"></path><path d="m4.5 13.5 2 2"></path>
+        {%- elif name == 'calculator' -%}
+            <rect x="5" y="2" width="14" height="20" rx="2"></rect><path d="M8 6h8"></path><path d="M8 10h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path><path d="M16 18h.01"></path>
+        {%- elif name == 'waves' -%}
+            <path d="M2 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"></path><path d="M2 17c2-4 4-4 6 0s4 4 6 0 4-4 6 0"></path>
+        {%- elif name == 'shield-alert' -%}
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path>
+        {%- elif name == 'cpu' -%}
+            <rect x="7" y="7" width="10" height="10" rx="1"></rect><path d="M9 1v4"></path><path d="M15 1v4"></path><path d="M9 19v4"></path><path d="M15 19v4"></path><path d="M1 9h4"></path><path d="M1 15h4"></path><path d="M19 9h4"></path><path d="M19 15h4"></path>
+        {%- elif name == 'thermometer' -%}
+            <path d="M14 14.76V5a4 4 0 0 0-8 0v9.76A6 6 0 1 0 14 14.76Z"></path><path d="M10 6v9"></path>
+        {%- elif name == 'aperture' -%}
+            <circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="m9.69 16-5.74-9.94"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path>
+        {%- elif name == 'book-open-check' -%}
+            <path d="M12 7v14"></path><path d="M3 5a7 7 0 0 1 9 2 7 7 0 0 1 9-2v14a7 7 0 0 0-9 2 7 7 0 0 0-9-2V5Z"></path><path d="m16 12 1.5 1.5L21 10"></path>
+        {%- endif -%}
+    </svg>
+{%- endmacro %}
 
-    <div class="actions secondary-actions">
-        <a href="{{ url_for('stats.estadisticas') }}">Ver estadísticas</a>
-        <a href="{{ url_for('stats.preguntas_falladas') }}">Preguntas más falladas</a>
-        <a href="{{ url_for('import_questions.importar_preguntas') }}">Importar preguntas</a>
+<section class="card setup-card">
+    <div class="setup-header">
+        <div class="setup-title-group">
+            <div class="setup-logo" aria-hidden="true">{{ lucide_icon('graduation-cap') }}</div>
+            <div>
+                <h1>Quiz de estudio</h1>
+                <p>Configura tu práctica</p>
+            </div>
+        </div>
+
+        <div class="actions secondary-actions">
+            <a href="{{ url_for('stats.estadisticas') }}">Ver estadísticas</a>
+            <a href="{{ url_for('stats.preguntas_falladas') }}">Preguntas falladas</a>
+            <a href="{{ url_for('import_questions.importar_preguntas') }}">Importar preguntas</a>
+        </div>
     </div>
 
     {% if error %}
@@ -16,55 +77,115 @@
     {% endif %}
 
     <form method="post">
-        <h2>Temas</h2>
+        {% set topic_icons = {
+            'Aceleradores Lineales y Radioterapia': 'zap',
+            'Aplicaciones Clínicas de las RI': 'cross',
+            'Desintegraciones': 'radiation',
+            'Detectores': 'radar',
+            'Electromagnetismo': 'magnet',
+            'Electrónica': 'circuit-board',
+            'Estadística y Probabilidad': 'chart-column',
+            'Física Cuántica': 'atom',
+            'Física Molecular': 'molecule',
+            'Física Nuclear': 'target',
+            'Física de Partículas': 'scatter',
+            'Física del Estado Sólido': 'grid-3x3',
+            'Informática': 'terminal',
+            'Interacción Radiación Materia': 'scan',
+            'Magnitudes y Unidades': 'ruler',
+            'Matemáticas': 'calculator',
+            'Mecánica y Ondas': 'waves',
+            'Protección Radiológica': 'shield-alert',
+            'Relatividad': 'orbit',
+            'Semiconductores': 'cpu',
+            'Termodinámica': 'thermometer',
+            'Óptica': 'aperture'
+        } %}
+
+        <div class="section-heading">
+            <span class="section-icon" aria-hidden="true">☰</span>
+            <div>
+                <h2>Temas</h2>
+                <p>Selecciona los temas que quieres incluir en tu práctica.</p>
+            </div>
+        </div>
 
         <div class="topics">
             {% for tema in topics %}
                 <label class="checkbox">
-                    <input type="checkbox" name="temas" value="{{ tema }}">
-                    {{ tema }}
+                    <input type="checkbox" name="temas" value="{{ tema }}" {% if tema in selected_topics %}checked{% endif %}>
+                    <span class="topic-mark" aria-hidden="true">{{ lucide_icon(topic_icons.get(tema, 'book-open-check')) }}</span>
+                    <span>{{ tema }}</span>
                 </label>
             {% endfor %}
         </div>
 
-        <p class="hint">Si no marcas ningún tema, saldrán preguntas de todos los temas.</p>
+        {% set selected_size = selected_batch_size|string if selected_batch_size is defined else '10' %}
+        {% set is_custom_size = selected_size not in ['1', '10'] %}
 
-        <section class="quiz-size-card" aria-labelledby="count-heading">
-            <div class="count-card__header">
-                <h2 id="count-heading">Número de preguntas</h2>
-                <p class="hint">Elige una opción rápida o define una cantidad personalizada.</p>
+        <section class="quiz-size-card" aria-labelledby="mode-heading">
+            <div class="section-heading compact">
+                <span class="section-icon" aria-hidden="true">⚑</span>
+                <h2 id="mode-heading">Tipo de examen</h2>
             </div>
 
-            <div class="quiz-size-options" role="radiogroup" aria-label="Número de preguntas">
-                <label class="quiz-size-option">
-                    <input type="radio" name="quiz_size_mode" value="1">
-                    <span class="quiz-size-title">1 pregunta</span>
+            <div class="segmented-control" role="radiogroup" aria-label="Tipo de examen">
+                <label class="quiz-size-option {% if selected_quiz_mode == 'standard' %}is-selected{% endif %}">
+                    <input type="radio" name="quiz_mode" value="standard" {% if selected_quiz_mode == 'standard' %}checked{% endif %}>
+                    <span class="quiz-size-title">Estándar</span>
                 </label>
 
-                <label class="quiz-size-option">
-                    <input type="radio" name="quiz_size_mode" value="10" checked>
-                    <span class="quiz-size-title">10 preguntas</span>
+                <label class="quiz-size-option {% if selected_quiz_mode == 'theory' %}is-selected{% endif %}">
+                    <input type="radio" name="quiz_mode" value="theory" {% if selected_quiz_mode == 'theory' %}checked{% endif %}>
+                    <span class="quiz-size-title">Teoría</span>
                 </label>
 
-                <label class="quiz-size-option quiz-size-option-custom">
-                    <input type="radio" name="quiz_size_mode" value="custom">
-                    <span class="quiz-size-title">Personalizado</span>
-                    <input
-                        type="number"
-                        name="custom_num_preguntas"
-                        id="custom_num_preguntas"
-                        min="1"
-                        step="1"
-                        placeholder="Ej. 25"
-                        class="quiz-size-custom-input"
-                    >
+                <label class="quiz-size-option {% if selected_quiz_mode == 'practical' %}is-selected{% endif %}">
+                    <input type="radio" name="quiz_mode" value="practical" {% if selected_quiz_mode == 'practical' %}checked{% endif %}>
+                    <span class="quiz-size-title">Práctico</span>
                 </label>
             </div>
-
-            <p class="hint">Si escribes un número válido, se usará ese valor. Si dejas el campo vacío o inválido, el backend usará una opción segura.</p>
         </section>
 
-        <button type="submit">Empezar</button>
+        <section class="quiz-size-card" aria-labelledby="count-heading">
+            <div class="section-heading compact">
+                <span class="section-icon" aria-hidden="true">123</span>
+                <h2 id="count-heading">Número de preguntas</h2>
+            </div>
+
+            <div class="count-control-row">
+                <div class="segmented-control" id="quiz-size-options" role="radiogroup" aria-label="Número de preguntas">
+                    <label class="quiz-size-option {% if selected_size == '1' %}is-selected{% endif %}">
+                        <input type="radio" name="quiz_size_mode" value="1" {% if selected_size == '1' %}checked{% endif %}>
+                        <span class="quiz-size-title">1</span>
+                    </label>
+
+                    <label class="quiz-size-option {% if selected_size == '10' %}is-selected{% endif %}">
+                        <input type="radio" name="quiz_size_mode" value="10" {% if selected_size == '10' %}checked{% endif %}>
+                        <span class="quiz-size-title">10</span>
+                    </label>
+
+                    <label class="quiz-size-option quiz-size-option-custom {% if is_custom_size %}is-selected is-custom-active{% endif %}">
+                        <input type="radio" name="quiz_size_mode" value="custom" {% if is_custom_size %}checked{% endif %}>
+                        <span class="quiz-size-title">Personalizado</span>
+                    </label>
+                </div>
+
+                <input
+                    type="number"
+                    name="custom_num_preguntas"
+                    id="custom_num_preguntas"
+                    min="1"
+                    step="1"
+                    placeholder="Ej. 25"
+                    class="quiz-size-custom-input"
+                    value="{% if is_custom_size %}{{ selected_size }}{% endif %}"
+                    {% if not is_custom_size %}hidden disabled{% endif %}
+                >
+            </div>
+        </section>
+
+        <button type="submit" class="start-button">Empezar</button>
     </form>
 </section>
 
@@ -72,7 +193,7 @@
 (function () {
     const customInput = document.querySelector("#custom_num_preguntas");
     const quickOptions = Array.from(document.querySelectorAll('input[name="quiz_size_mode"]'));
-    const optionLabels = Array.from(document.querySelectorAll('.quiz-size-option'));
+    const optionLabels = Array.from(document.querySelectorAll('#quiz-size-options .quiz-size-option'));
 
     if (!customInput || quickOptions.length === 0) {
         return;
@@ -91,6 +212,14 @@
                 }
             }
         });
+
+        const showCustomInput = Boolean(customRadio && customRadio.checked);
+        customInput.hidden = !showCustomInput;
+        customInput.disabled = !showCustomInput;
+        const customLabel = customInput.closest(".quiz-size-option-custom");
+        if (customLabel) {
+            customLabel.classList.toggle("is-custom-active", showCustomInput);
+        }
     };
 
     customInput.addEventListener("focus", () => {
@@ -108,7 +237,12 @@
     });
 
     quickOptions.forEach((input) => {
-        input.addEventListener("change", syncSelectedState);
+        input.addEventListener("change", () => {
+            syncSelectedState();
+            if (input.value === "custom") {
+                customInput.focus();
+            }
+        });
     });
 
     syncSelectedState();
