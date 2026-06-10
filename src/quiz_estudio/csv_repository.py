@@ -68,6 +68,15 @@ def get_questions_by_ids(
     return [questions_by_id[question_id] for question_id in question_ids if question_id in questions_by_id]
 
 
+def parse_teoria(value: str, row_number: int | None = None) -> int:
+    raw_value = value.strip()
+    if raw_value not in {"0", "1"}:
+        location = f" en la fila {row_number}" if row_number is not None else ""
+        raise ValueError(f"teoria debe ser 0 o 1{location}")
+
+    return int(raw_value)
+
+
 def load_questions() -> list[dict[str, Any]]:
     """
     Carga y valida las preguntas desde preguntas.csv.
@@ -106,7 +115,7 @@ def load_questions() -> list[dict[str, Any]]:
                 "respuesta_correcta": int(row["respuesta_correcta"]),
                 "explicacion": row["explicacion"],
                 "tema": row["tema"],
-                "teoria": int(row["teoria"] or 0),
+                "teoria": parse_teoria(row["teoria"], index + 2),
             }
 
             questions.append(question)
@@ -152,6 +161,11 @@ def get_questions_by_topic_from_csv() -> dict[str, list[dict[str, Any]]]:
             if respuesta_correcta_int not in {1, 2, 3, 4}:
                 continue
 
+            try:
+                teoria = parse_teoria(row.get("teoria", ""), index + 2)
+            except ValueError:
+                continue
+
             question = {
                 "question_id": index,
                 "csv_id": index,
@@ -163,7 +177,7 @@ def get_questions_by_topic_from_csv() -> dict[str, list[dict[str, Any]]]:
                 "respuesta_correcta": respuesta_correcta_int,
                 "explicacion": row.get("explicacion", ""),
                 "tema": tema,
-                "teoria": int(row.get("teoria", "0") or 0),
+                "teoria": teoria,
             }
 
             questions_by_topic.setdefault(tema, []).append(question)

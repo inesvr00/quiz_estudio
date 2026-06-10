@@ -8,7 +8,10 @@ from quiz_estudio.services import import_service
 
 
 CSV_HEADER = (
-    "enunciado,opcion_1,opcion_2,opcion_3,opcion_4,respuesta_correcta,explicacion,tema\n"
+    "enunciado,opcion_1,opcion_2,opcion_3,opcion_4,respuesta_correcta,explicacion,tema,teoria\n"
+)
+CSV_HEADER_WITH_SPACES = (
+    "enunciado, opcion_1, opcion_2, opcion_3, opcion_4, respuesta_correcta, explicacion, tema, teoria\n"
 )
 
 
@@ -23,9 +26,9 @@ def isolated_csv(tmp_path, monkeypatch):
     _write_csv(
         csv_path,
         [
-            "Capital de Francia,A,Paris,C,D,1,Explicacion,Geografia",
-            "Que numero sigue al 2?,A,3,C,D,1,Explicacion,Matematicas",
-            "La capital de Francia es Paris,A,Paris,C,D,1,Explicacion,Geografia",
+            "Capital de Francia,A,Paris,C,D,1,Explicacion,Geografia,1",
+            "Que numero sigue al 2?,A,3,C,D,1,Explicacion,Matematicas,0",
+            "La capital de Francia es Paris,A,Paris,C,D,1,Explicacion,Geografia,1",
         ],
     )
 
@@ -122,15 +125,54 @@ def test_sensitive_words_force_review(keyword: str) -> None:
 def test_preview_questions_reports_review_rows(isolated_csv) -> None:
     preview = import_service.preview_questions_from_text(
         CSV_HEADER
-        + "Cual NO es la capital de Francia?,A,Paris,C,D,1,Explicacion,Geografia\n"
-        + "Pregunta totalmente distinta,A,B,C,D,1,Explicacion,General\n"
+        + "Cual NO es la capital de Francia?,A,Paris,C,D,1,Explicacion,Geografia,1\n"
+        + "Pregunta totalmente distinta,A,B,C,D,1,Explicacion,General,0\n"
     )
 
     assert preview["total_read"] == 2
     assert len(preview["valid"]) == 1
+    assert preview["valid"][0]["teoria"] == "0"
     assert len(preview["duplicates"]) == 0
     assert len(preview["review"]) == 1
+    assert preview["review"][0]["teoria"] == "1"
     assert preview["review"][0]["matched_question"]
+
+
+def test_preview_accepts_header_with_spaces(isolated_csv) -> None:
+    preview = import_service.preview_questions_from_text(
+        CSV_HEADER_WITH_SPACES
+        + "Pregunta totalmente distinta, A, B, C, D, 1, Explicacion, General, 0\n"
+    )
+
+    assert preview["total_read"] == 1
+    assert len(preview["valid"]) == 1
+    assert preview["valid"][0]["enunciado"] == "Pregunta totalmente distinta"
+    assert preview["valid"][0]["teoria"] == "0"
+
+
+def test_preview_accepts_rows_without_header(isolated_csv) -> None:
+    preview = import_service.preview_questions_from_text(
+        '"Sea una lente cuya potencia es 0,5 dioptrias...", "0,5 cm", "0,25 cm", "1 m", "2 m", "4", "explicacion...", "Optica", "0"\n'
+    )
+
+    assert preview["total_read"] == 1
+    assert len(preview["valid"]) == 1
+    assert preview["valid"][0]["enunciado"] == "Sea una lente cuya potencia es 0,5 dioptrias..."
+    assert preview["valid"][0]["respuesta_correcta"] == "4"
+    assert preview["valid"][0]["tema"] == "Optica"
+    assert preview["valid"][0]["teoria"] == "0"
+
+
+def test_preview_reports_wrong_field_count_without_header(isolated_csv) -> None:
+    preview = import_service.preview_questions_from_text(
+        "Pregunta incompleta,A,B,C,D,1,Explicacion,General\n"
+    )
+
+    assert preview["total_read"] == 1
+    assert len(preview["valid"]) == 0
+    assert preview["errors"][0]["errors"] == [
+        "Fila 1: se esperaban 9 campos y se recibieron 8"
+    ]
 
 
 def test_preview_builds_match_index_once(isolated_csv, monkeypatch) -> None:
@@ -145,8 +187,19 @@ def test_preview_builds_match_index_once(isolated_csv, monkeypatch) -> None:
 
     import_service.preview_questions_from_text(
         CSV_HEADER
-        + "Nueva pregunta 1,A,B,C,D,1,Explicacion,General\n"
-        + "Nueva pregunta 2,A,B,C,D,1,Explicacion,General\n"
+        + "Nueva pregunta 1,A,B,C,D,1,Explicacion,General,0\n"
+        + "Nueva pregunta 2,A,B,C,D,1,Explicacion,General,1\n"
     )
 
     assert calls["count"] == 1
+
+
+def test_preview_questions_reports_invalid_teoria(isolated_csv) -> None:
+    preview = import_service.preview_questions_from_text(
+        CSV_HEADER
+        + "Pregunta con teoria invalida,A,B,C,D,1,Explicacion,General,2\n"
+    )
+
+    assert preview["total_read"] == 1
+    assert len(preview["valid"]) == 0
+    assert preview["errors"][0]["errors"] == ["Fila 2: teoria debe ser 0 o 1"]

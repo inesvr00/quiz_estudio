@@ -21,6 +21,7 @@ EXPECTED_COLUMNS = [
     "respuesta_correcta",
     "explicacion",
     "tema",
+    "teoria",
 ]
 REQUIRED_NON_EMPTY = [
     "enunciado",
@@ -30,11 +31,13 @@ REQUIRED_NON_EMPTY = [
     "opcion_4",
     "respuesta_correcta",
     "tema",
+    "teoria",
 ]
 
 duplicate_threshold = 92.0
 review_threshold = 82.0
 SENSITIVE_MARKERS = {"no", "excepto", "incorrecta", "falsa", "verdadera"}
+EXPECTED_FIELD_COUNT = len(EXPECTED_COLUMNS)
 
 
 def normalize_enunciado(enunciado: str) -> str:
@@ -159,10 +162,7 @@ def validate_main_csv_rows() -> list[dict[str, str]]:
     errors = []
 
     with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as file:
-        reader = csv.DictReader(file)
-        validate_header(reader.fieldnames)
-
-        for row_number, row in enumerate(reader, start=2):
+        for row_number, row in read_csv_rows(file, allow_headerless=False):
             row_errors = validate_row(row, row_number)
             if row_errors:
                 errors.extend(row_errors)
@@ -178,8 +178,9 @@ def validate_main_csv_rows() -> list[dict[str, str]]:
 
 
 def validate_header(fieldnames: list[str] | None) -> None:
-    if fieldnames != EXPECTED_COLUMNS:
-        received = ", ".join(fieldnames or [])
+    normalized_fieldnames = normalize_csv_values(fieldnames or [])
+    if normalized_fieldnames != EXPECTED_COLUMNS:
+        received = ", ".join(normalized_fieldnames)
         expected = ", ".join(EXPECTED_COLUMNS)
         raise ValueError(
             "El CSV externo debe tener exactamente estas columnas y en este orden:\n"
@@ -188,11 +189,68 @@ def validate_header(fieldnames: list[str] | None) -> None:
         )
 
 
+def normalize_csv_values(values: list[str]) -> list[str]:
+    return [value.strip() for value in values]
+
+
+def is_expected_header(values: list[str]) -> bool:
+    return normalize_csv_values(values) == EXPECTED_COLUMNS
+
+
+def row_from_values(values: list[str]) -> dict[str, str]:
+    return dict(zip(EXPECTED_COLUMNS, normalize_csv_values(values), strict=True))
+
+
+def validate_field_count(values: list[str], row_number: int) -> list[str]:
+    if len(values) == EXPECTED_FIELD_COUNT:
+        return []
+
+    return [
+        f"Fila {row_number}: se esperaban {EXPECTED_FIELD_COUNT} campos y se recibieron {len(values)}"
+    ]
+
+
+def read_csv_rows(file, allow_headerless: bool) -> list[tuple[int, dict[str, str]]]:
+    reader = csv.reader(file, skipinitialspace=True)
+
+    try:
+        first_row = next(reader)
+    except StopIteration as exc:
+        raise ValueError("El CSV esta vacio o no tiene filas.") from exc
+
+    first_row = normalize_csv_values(first_row)
+    rows: list[tuple[int, dict[str, str]]] = []
+
+    if is_expected_header(first_row):
+        data_start = 2
+    elif allow_headerless:
+        field_count_errors = validate_field_count(first_row, 1)
+        if field_count_errors:
+            rows.append((1, {"__errors__": "\n".join(field_count_errors)}))
+        else:
+            rows.append((1, row_from_values(first_row)))
+        data_start = 2
+    else:
+        validate_header(first_row)
+        data_start = 2
+
+    for row_number, values in enumerate(reader, start=data_start):
+        values = normalize_csv_values(values)
+        field_count_errors = validate_field_count(values, row_number)
+        if field_count_errors:
+            rows.append((row_number, {"__errors__": "\n".join(field_count_errors)}))
+            continue
+
+        rows.append((row_number, row_from_values(values)))
+
+    return rows
+
+
 def validate_row(row: dict[str, str], row_number: int) -> list[str]:
     errors = []
 
-    if None in row:
-        errors.append("tiene mas columnas que la cabecera")
+    if "__errors__" in row:
+        return row["__errors__"].splitlines()
 
     for column in REQUIRED_NON_EMPTY:
         if not row.get(column, "").strip():
@@ -208,12 +266,23 @@ def validate_row(row: dict[str, str], row_number: int) -> list[str]:
             if answer < 1 or answer > 4:
                 errors.append("respuesta_correcta debe estar entre 1 y 4")
 
+    raw_teoria = row.get("teoria", "").strip()
+    if raw_teoria:
+        try:
+            teoria = int(raw_teoria)
+        except ValueError:
+            errors.append("teoria debe ser 0 o 1")
+        else:
+            if teoria not in {0, 1}:
+                errors.append("teoria debe ser 0 o 1")
+
     return [f"Fila {row_number}: {error}" for error in errors]
 
 
 def clean_row(row: dict[str, str]) -> dict[str, str]:
     cleaned = {column: row.get(column, "").strip() for column in EXPECTED_COLUMNS}
     cleaned["respuesta_correcta"] = str(int(cleaned["respuesta_correcta"]))
+    cleaned["teoria"] = str(int(cleaned["teoria"]))
     return cleaned
 
 
@@ -254,10 +323,7 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
     total_read = 0
 
     with io.StringIO(csv_text.strip().lstrip("\ufeff")) as file:
-        reader = csv.DictReader(file)
-        validate_header(reader.fieldnames)
-
-        for row_number, row in enumerate(reader, start=2):
+        for row_number, row in read_csv_rows(file, allow_headerless=True):
             total_read += 1
             row_errors = validate_row(row, row_number)
 
@@ -282,6 +348,7 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
                         "row_number": row_number,
                         "enunciado": enunciado,
                         "tema": cleaned["tema"],
+                        "teoria": cleaned["teoria"],
                         "matched_question": existing_match["original"],
                         "similarity": 100.0,
                     }
@@ -300,6 +367,7 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
                         "row_number": row_number,
                         "enunciado": enunciado,
                         "tema": cleaned["tema"],
+                        "teoria": cleaned["teoria"],
                         "matched_question": best_match["question"] if best_match else enunciado,
                         "similarity": best_match["score"] if best_match else 100.0,
                     }

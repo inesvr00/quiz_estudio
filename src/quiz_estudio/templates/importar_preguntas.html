@@ -20,7 +20,7 @@
     {% endif %}
 
     <form method="post">
-        <textarea name="csv_text" rows="12" placeholder="enunciado,opcion_1,opcion_2,opcion_3,opcion_4,respuesta_correcta,explicacion,tema">{{ csv_text }}</textarea>
+        <textarea name="csv_text" rows="12" placeholder="enunciado,opcion_1,opcion_2,opcion_3,opcion_4,respuesta_correcta,explicacion,tema,teoria">{{ csv_text }}</textarea>
 
         <div class="actions import-actions">
             <button type="submit" name="action" value="validate">Validar</button>
@@ -65,6 +65,7 @@
                             <th>Fila</th>
                             <th>Pregunta</th>
                             <th>Tema</th>
+                            <th>Teoria</th>
                             <th>Correcta</th>
                         </tr>
                     </thead>
@@ -74,6 +75,7 @@
                                 <td>{{ q.row_number }}</td>
                                 <td>{{ q.enunciado }}</td>
                                 <td>{{ q.tema }}</td>
+                                <td>{{ q.teoria }}</td>
                                 <td>{{ q.respuesta_correcta }}</td>
                             </tr>
                         {% endfor %}
@@ -95,6 +97,7 @@
                             <th>Fila</th>
                             <th>Pregunta</th>
                             <th>Tema</th>
+                            <th>Teoria</th>
                             <th>Coincidencia</th>
                         </tr>
                     </thead>
@@ -104,6 +107,7 @@
                                 <td>{{ q.row_number }}</td>
                                 <td>{{ q.enunciado }}</td>
                                 <td>{{ q.tema }}</td>
+                                <td>{{ q.teoria }}</td>
                                 <td>{{ q.similarity|round(1) }}%</td>
                             </tr>
                         {% endfor %}
@@ -124,6 +128,7 @@
                         <tr>
                             <th>Fila</th>
                             <th>Nueva pregunta</th>
+                            <th>Teoria</th>
                             <th>Más parecida</th>
                             <th>Coincidencia</th>
                         </tr>
@@ -138,6 +143,7 @@
                                         <small class="hint">Sensibles: {{ q.new_sensitive_markers|join(', ') }}</small>
                                     {% endif %}
                                 </td>
+                                <td>{{ q.teoria }}</td>
                                 <td>
                                     <div>{{ q.matched_question }}</div>
                                     {% if q.matched_sensitive_markers %}
