@@ -63,6 +63,13 @@ def client(app):
     return app.test_client()
 
 
+def test_health_returns_ok(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "ok"}
+
+
 def _start_quiz(client, data):
     response = client.post("/", data=data, follow_redirects=True)
     assert response.status_code == 200

@@ -13,6 +13,10 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = SECRET_KEY
 
+    @app.route("/health", methods=["GET"])
+    def health():
+        return {"status": "ok"}, 200
+
     app.register_blueprint(quiz_bp)
     app.register_blueprint(stats_bp)
     app.register_blueprint(import_bp)
