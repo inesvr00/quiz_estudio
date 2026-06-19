@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import sqlite3
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
-
-from ..config import DB_PATH
 
 
 AttemptRow = tuple[int, str, str, int, int, bool]
@@ -54,186 +51,6 @@ class AttemptRepository(ABC):
         offset: int,
     ) -> list[dict[str, Any]]:
         raise NotImplementedError
-
-
-class SqliteAttemptRepository(AttemptRepository):
-    def initialize(self) -> None:
-        with sqlite3.connect(DB_PATH) as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS question_attempts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    question_id INTEGER NOT NULL,
-                    enunciado TEXT NOT NULL,
-                    tema TEXT NOT NULL,
-                    respuesta_correcta INTEGER NOT NULL,
-                    respuesta_usuario INTEGER NOT NULL,
-                    es_correcta INTEGER NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(DB_PATH)
-        connection.row_factory = sqlite3.Row
-        return connection
-
-    @staticmethod
-    def _rows_to_dicts(rows: Iterable[sqlite3.Row]) -> list[dict[str, Any]]:
-        return [dict(row) for row in rows]
-
-    def save_attempts(self, attempts: Iterable[AttemptRow]) -> None:
-        with self._connect() as connection:
-            connection.executemany(
-                """
-                INSERT INTO question_attempts (
-                    question_id,
-                    enunciado,
-                    tema,
-                    respuesta_correcta,
-                    respuesta_usuario,
-                    es_correcta
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        question_id,
-                        enunciado,
-                        tema,
-                        respuesta_correcta,
-                        respuesta_usuario,
-                        int(es_correcta),
-                    )
-                    for (
-                        question_id,
-                        enunciado,
-                        tema,
-                        respuesta_correcta,
-                        respuesta_usuario,
-                        es_correcta,
-                    ) in attempts
-                ],
-            )
-
-    def get_seen_question_ids(self) -> set[int]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT DISTINCT question_id
-                FROM question_attempts
-                """
-            ).fetchall()
-
-        return {row["question_id"] for row in rows}
-
-    def get_seen_question_enunciados_by_topic(self) -> list[dict[str, Any]]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT tema, enunciado
-                FROM question_attempts
-                WHERE enunciado IS NOT NULL
-                """
-            ).fetchall()
-
-        return self._rows_to_dicts(rows)
-
-    def get_totals(self) -> dict[str, int]:
-        with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT
-                    COUNT(*) AS total,
-                    COALESCE(SUM(es_correcta), 0) AS aciertos
-                FROM question_attempts
-                """
-            ).fetchone()
-
-        return dict(row)
-
-    def get_topic_totals(self) -> list[dict[str, Any]]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT
-                    tema,
-                    COUNT(*) AS total,
-                    COALESCE(SUM(es_correcta), 0) AS aciertos
-                FROM question_attempts
-                GROUP BY tema
-                ORDER BY tema
-                """
-            ).fetchall()
-
-        return self._rows_to_dicts(rows)
-
-    def get_attempt_topics(self) -> list[str]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT DISTINCT tema
-                FROM question_attempts
-                ORDER BY tema
-                """
-            ).fetchall()
-
-        return [row["tema"] for row in rows]
-
-    def count_failed_questions(self, tema: str | None = None) -> int:
-        where_clause = "WHERE tema = ?" if tema else ""
-        params = (tema,) if tema else ()
-
-        with self._connect() as connection:
-            row = connection.execute(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM (
-                    SELECT COUNT(*) - COALESCE(SUM(es_correcta), 0) AS fallos
-                    FROM question_attempts
-                    {where_clause}
-                    GROUP BY question_id, enunciado, tema
-                    HAVING fallos > 0
-                )
-                """,
-                params,
-            ).fetchone()
-
-        return row["total"]
-
-    def get_failed_questions(
-        self,
-        tema: str | None,
-        order_clause: str,
-        limit: int,
-        offset: int,
-    ) -> list[dict[str, Any]]:
-        where_clause = "WHERE tema = ?" if tema else ""
-        params: tuple[Any, ...] = (tema,) if tema else ()
-
-        with self._connect() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT
-                    question_id,
-                    enunciado,
-                    tema,
-                    COUNT(*) AS total,
-                    COALESCE(SUM(es_correcta), 0) AS aciertos,
-                    COUNT(*) - COALESCE(SUM(es_correcta), 0) AS fallos,
-                    ((COUNT(*) - COALESCE(SUM(es_correcta), 0)) * 100.0 / COUNT(*)) AS porcentaje_fallo
-                FROM question_attempts
-                {where_clause}
-                GROUP BY question_id, enunciado, tema
-                HAVING fallos > 0
-                ORDER BY {order_clause}
-                LIMIT ? OFFSET ?
-                """,
-                (*params, limit, offset),
-            ).fetchall()
-
-        return self._rows_to_dicts(rows)
 
 
 class PostgresAttemptRepository(AttemptRepository):
@@ -398,7 +215,7 @@ class PostgresAttemptRepository(AttemptRepository):
                         SELECT COUNT(*) - COALESCE(SUM(es_correcta::integer), 0) AS fallos
                         FROM question_attempts
                         {where_clause}
-                        GROUP BY question_id, enunciado, tema
+                        GROUP BY question_id, tema
                         HAVING COUNT(*) - COALESCE(SUM(es_correcta::integer), 0) > 0
                     ) AS failed_questions
                     """,
@@ -424,7 +241,7 @@ class PostgresAttemptRepository(AttemptRepository):
                     f"""
                     SELECT
                         question_id,
-                        enunciado,
+                        MIN(enunciado) AS enunciado,
                         tema,
                         COUNT(*) AS total,
                         COALESCE(SUM(es_correcta::integer), 0) AS aciertos,
@@ -432,7 +249,7 @@ class PostgresAttemptRepository(AttemptRepository):
                         ((COUNT(*) - COALESCE(SUM(es_correcta::integer), 0)) * 100.0 / COUNT(*)) AS porcentaje_fallo
                     FROM question_attempts
                     {where_clause}
-                    GROUP BY question_id, enunciado, tema
+                    GROUP BY question_id, tema
                     HAVING COUNT(*) - COALESCE(SUM(es_correcta::integer), 0) > 0
                     ORDER BY {order_clause}
                     LIMIT %s OFFSET %s

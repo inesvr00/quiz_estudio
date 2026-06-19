@@ -19,15 +19,15 @@
         <h2>{{ loop.index }}. {{ q.enunciado }}</h2>
 
         <div class="options-result">
-            {% for i in range(1, 5) %}
-                {% set is_correct = i == q.respuesta_correcta %}
-                {% set is_user = i == q.respuesta_usuario %}
+            {% for option in q.display_options %}
+                {% set is_correct = option.is_correct %}
+                {% set is_user = option.option_id == q.respuesta_usuario %}
 
                 <div class="option-result
                     {% if is_correct %}answer-correct{% endif %}
                     {% if is_user and not is_correct %}answer-wrong{% endif %}
                 ">
-                    <strong>{{ i }}.</strong> {{ q["opcion_" ~ i] }}
+                    <strong>{{ loop.index }}.</strong> {{ option.text }}
 
                     {% if is_correct %}
                         <span class="badge correct-semantic">Correcta</span>

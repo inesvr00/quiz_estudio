@@ -4,6 +4,7 @@ import random
 from typing import Any
 
 from ..db import get_attempt_repository
+from ..question_repository import get_storage_question_id
 
 
 QUIZ_MODE_STANDARD = "standard"
@@ -62,7 +63,7 @@ def select_quiz_questions(
 
     seen_question_ids = get_seen_question_ids()
     weights = [
-        2.0 if question["csv_id"] not in seen_question_ids else 1.0
+        2.0 if get_storage_question_id(question) not in seen_question_ids else 1.0
         for question in filtered_questions
     ]
 

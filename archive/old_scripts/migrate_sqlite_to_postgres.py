@@ -11,7 +11,7 @@ import psycopg
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SQLITE_DB_PATH = PROJECT_ROOT / "stats.db"
+SQLITE_DB_PATH = PROJECT_ROOT / "local_data" / "stats.db"
 TABLE_NAME = "question_attempts"
 REQUIRED_COLUMNS = (
     "question_id",
@@ -26,13 +26,13 @@ REQUIRED_COLUMNS = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Migra intentos desde stats.db local a PostgreSQL/Supabase.",
+        description="Migra intentos desde SQLite local a PostgreSQL/Supabase.",
     )
     parser.add_argument(
         "--sqlite-path",
         type=Path,
         default=SQLITE_DB_PATH,
-        help="Ruta del stats.db local. Por defecto usa ./stats.db.",
+        help="Ruta del stats.db local. Por defecto usa ./local_data/stats.db.",
     )
     parser.add_argument(
         "--dry-run",
@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    database_url = "postgresql://postgres.sidzjtxybrtypdppcfhv:9udtdjMgYbLm1OdH@aws-0-eu-west-1.pooler.supabase.com:5432/postgres"
+    database_url = os.getenv("DATABASE_URL", "").strip()
     if not database_url:
         print("Error: configura DATABASE_URL antes de ejecutar la migracion.")
         return 1
@@ -110,7 +110,7 @@ def ensure_sqlite_table_exists(connection: sqlite3.Connection) -> None:
         (TABLE_NAME,),
     ).fetchone()
     if row is None:
-        raise SystemExit(f"Error: stats.db no contiene la tabla {TABLE_NAME}.")
+        raise SystemExit(f"Error: la base SQLite no contiene la tabla {TABLE_NAME}.")
 
     columns = {
         row["name"]
@@ -162,7 +162,7 @@ def migrate_rows(
     print("Resumen de migracion:")
     print(f"- Tabla destino: {TABLE_NAME}")
     print("- No se borraran datos en PostgreSQL.")
-    print("- stats.db se abre en modo solo lectura.")
+    print("- La base SQLite se abre en modo solo lectura.")
     print(
         "- Duplicado: mismos question_id, enunciado, tema, respuesta_correcta, "
         "respuesta_usuario, es_correcta y created_at."
