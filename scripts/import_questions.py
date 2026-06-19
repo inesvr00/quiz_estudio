@@ -13,7 +13,7 @@ from quiz_estudio.services.import_service import import_questions
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Importa preguntas validas y no duplicadas a preguntas.csv.",
+        description="Importa preguntas validas y no duplicadas a preguntas_nuevo_formato.csv.",
         epilog=(
             "Validacion manual tras importar: "
             ".\\.venv\\Scripts\\python.exe -c \"from quiz_estudio.csv_repository "

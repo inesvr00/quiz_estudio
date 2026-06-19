@@ -4,7 +4,7 @@
 <header class="topbar">
     <div>
         <h1>Importar preguntas</h1>
-        <p class="hint">Pega un CSV con la misma cabecera que preguntas.csv.</p>
+        <p class="hint">Pega un CSV con la cabecera actual de preguntas.</p>
     </div>
 
     <a href="{{ url_for('quiz.index') }}">Volver</a>
@@ -20,7 +20,7 @@
     {% endif %}
 
     <form method="post">
-        <textarea name="csv_text" rows="12" placeholder="enunciado,opcion_1,opcion_2,opcion_3,opcion_4,respuesta_correcta,explicacion,tema,teoria">{{ csv_text }}</textarea>
+        <textarea name="csv_text" rows="12" placeholder="question_id,enunciado,respuesta_correcta,opcion_falsa_1,opcion_falsa_2,opcion_falsa_3,explicacion,tema,teoria">{{ csv_text }}</textarea>
 
         <div class="actions import-actions">
             <button type="submit" name="action" value="validate">Validar</button>

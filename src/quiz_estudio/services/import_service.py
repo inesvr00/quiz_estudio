@@ -2,42 +2,40 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 from rapidfuzz import fuzz, process
 
-from ..config import BACKUP_DIR, CSV_PATH
-from ..csv_repository import normalize_text
+from ..config import BACKUP_DIR, QUESTIONS_CSV_PATH
+from ..csv_repository import normalize_text, parse_teoria
+from ..question_model import (
+    Question,
+    REQUIRED_COLUMNS,
+    question_from_csv_row,
+)
 
 
-EXPECTED_COLUMNS = [
+CSV_PATH = QUESTIONS_CSV_PATH
+NEW_COLUMNS = [
+    "question_id",
     "enunciado",
-    "opcion_1",
-    "opcion_2",
-    "opcion_3",
-    "opcion_4",
     "respuesta_correcta",
+    "opcion_falsa_1",
+    "opcion_falsa_2",
+    "opcion_falsa_3",
     "explicacion",
     "tema",
     "teoria",
 ]
-REQUIRED_NON_EMPTY = [
-    "enunciado",
-    "opcion_1",
-    "opcion_2",
-    "opcion_3",
-    "opcion_4",
-    "respuesta_correcta",
-    "tema",
-    "teoria",
-]
+EXPECTED_COLUMNS = NEW_COLUMNS
+EXPECTED_FIELD_COUNT = len(NEW_COLUMNS)
 
 duplicate_threshold = 92.0
 review_threshold = 82.0
 SENSITIVE_MARKERS = {"no", "excepto", "incorrecta", "falsa", "verdadera"}
-EXPECTED_FIELD_COUNT = len(EXPECTED_COLUMNS)
 
 
 def normalize_enunciado(enunciado: str) -> str:
@@ -64,10 +62,7 @@ def build_question_match_index(existing_questions: list[str]) -> list[dict[str, 
 def _build_question_match_lookup(
     existing_question_index: list[dict[str, object]],
 ) -> dict[str, dict[str, object]]:
-    return {
-        entry["normalized"]: entry
-        for entry in existing_question_index
-    }
+    return {entry["normalized"]: entry for entry in existing_question_index}
 
 
 def _coerce_question_index(
@@ -162,55 +157,67 @@ def validate_main_csv_rows() -> list[dict[str, str]]:
     errors = []
 
     with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as file:
-        for row_number, row in read_csv_rows(file, allow_headerless=False):
-            row_errors = validate_row(row, row_number)
+        for row_number, row, csv_format in read_csv_rows(file, allow_headerless=False):
+            row_errors = validate_row(row, row_number, csv_format)
             if row_errors:
                 errors.extend(row_errors)
             else:
-                rows.append(clean_row(row))
+                rows.append(clean_row(row, row_number, csv_format))
 
     if errors:
         raise ValueError(
-            "preguntas.csv contiene filas invalidas:\n" + "\n".join(errors)
+            f"{CSV_PATH.name} contiene filas invalidas:\n" + "\n".join(errors)
         )
 
     return rows
 
 
-def validate_header(fieldnames: list[str] | None) -> None:
+def validate_header(fieldnames: list[str] | None) -> str:
     normalized_fieldnames = normalize_csv_values(fieldnames or [])
-    if normalized_fieldnames != EXPECTED_COLUMNS:
+    if not is_expected_header(normalized_fieldnames):
+        new_expected = ", ".join(NEW_COLUMNS)
         received = ", ".join(normalized_fieldnames)
-        expected = ", ".join(EXPECTED_COLUMNS)
         raise ValueError(
-            "El CSV externo debe tener exactamente estas columnas y en este orden:\n"
-            f"{expected}\n"
+            "El CSV externo debe tener las columnas del formato actual.\n"
+            f"Formato nuevo: {new_expected}\n"
             f"Columnas recibidas: {received or '(ninguna)'}"
         )
+
+    return "new"
 
 
 def normalize_csv_values(values: list[str]) -> list[str]:
     return [value.strip() for value in values]
 
 
+def detect_import_format(values: list[str]) -> str | None:
+    columns = set(normalize_csv_values(values))
+    if REQUIRED_COLUMNS <= columns:
+        return "new"
+    return None
+
+
 def is_expected_header(values: list[str]) -> bool:
-    return normalize_csv_values(values) == EXPECTED_COLUMNS
+    return detect_import_format(values) is not None
 
 
 def row_from_values(values: list[str]) -> dict[str, str]:
-    return dict(zip(EXPECTED_COLUMNS, normalize_csv_values(values), strict=True))
+    return dict(zip(NEW_COLUMNS, normalize_csv_values(values), strict=True))
 
 
 def validate_field_count(values: list[str], row_number: int) -> list[str]:
-    if len(values) == EXPECTED_FIELD_COUNT:
+    if len(values) == len(NEW_COLUMNS):
         return []
 
     return [
-        f"Fila {row_number}: se esperaban {EXPECTED_FIELD_COUNT} campos y se recibieron {len(values)}"
+        f"Fila {row_number}: se esperaban {len(NEW_COLUMNS)} campos con el formato actual y se recibieron {len(values)}"
     ]
 
 
-def read_csv_rows(file, allow_headerless: bool) -> list[tuple[int, dict[str, str]]]:
+def read_csv_rows(
+    file,
+    allow_headerless: bool,
+) -> list[tuple[int, dict[str, str], str]]:
     reader = csv.reader(file, skipinitialspace=True)
 
     try:
@@ -219,77 +226,92 @@ def read_csv_rows(file, allow_headerless: bool) -> list[tuple[int, dict[str, str
         raise ValueError("El CSV esta vacio o no tiene filas.") from exc
 
     first_row = normalize_csv_values(first_row)
-    rows: list[tuple[int, dict[str, str]]] = []
+    rows: list[tuple[int, dict[str, str], str]] = []
+    csv_format = detect_import_format(first_row)
 
-    if is_expected_header(first_row):
+    if csv_format is not None:
+        headers = first_row
         data_start = 2
     elif allow_headerless:
-        field_count_errors = validate_field_count(first_row, 1)
-        if field_count_errors:
-            rows.append((1, {"__errors__": "\n".join(field_count_errors)}))
-        else:
-            rows.append((1, row_from_values(first_row)))
+        try:
+            validate_header(first_row)
+        except ValueError as exc:
+            rows.append((1, {"__errors__": str(exc)}, "new"))
+            return rows
+        headers = first_row
+        csv_format = "new"
         data_start = 2
     else:
         validate_header(first_row)
+        headers = first_row
+        csv_format = "new"
         data_start = 2
 
     for row_number, values in enumerate(reader, start=data_start):
         values = normalize_csv_values(values)
-        field_count_errors = validate_field_count(values, row_number)
-        if field_count_errors:
-            rows.append((row_number, {"__errors__": "\n".join(field_count_errors)}))
+        if len(values) != len(headers):
+            rows.append(
+                (
+                    row_number,
+                    {
+                        "__errors__": (
+                            f"Fila {row_number}: se esperaban {len(headers)} campos "
+                            f"y se recibieron {len(values)}"
+                        )
+                    },
+                    csv_format,
+                )
+            )
             continue
 
-        rows.append((row_number, row_from_values(values)))
+        rows.append((row_number, dict(zip(headers, values, strict=True)), csv_format))
 
     return rows
 
 
-def validate_row(row: dict[str, str], row_number: int) -> list[str]:
-    errors = []
-
+def validate_row(row: dict[str, str], row_number: int, csv_format: str) -> list[str]:
     if "__errors__" in row:
         return row["__errors__"].splitlines()
 
-    for column in REQUIRED_NON_EMPTY:
-        if not row.get(column, "").strip():
-            errors.append(f"{column} esta vacio")
+    try:
+        clean_row(row, row_number, csv_format)
+    except ValueError as exc:
+        return [f"Fila {row_number}: {exc}"]
 
-    raw_answer = row.get("respuesta_correcta", "").strip()
-    if raw_answer:
-        try:
-            answer = int(raw_answer)
-        except ValueError:
-            errors.append("respuesta_correcta debe ser un entero entre 1 y 4")
-        else:
-            if answer < 1 or answer > 4:
-                errors.append("respuesta_correcta debe estar entre 1 y 4")
-
-    raw_teoria = row.get("teoria", "").strip()
-    if raw_teoria:
-        try:
-            teoria = int(raw_teoria)
-        except ValueError:
-            errors.append("teoria debe ser 0 o 1")
-        else:
-            if teoria not in {0, 1}:
-                errors.append("teoria debe ser 0 o 1")
-
-    return [f"Fila {row_number}: {error}" for error in errors]
+    return []
 
 
-def clean_row(row: dict[str, str]) -> dict[str, str]:
-    cleaned = {column: row.get(column, "").strip() for column in EXPECTED_COLUMNS}
-    cleaned["respuesta_correcta"] = str(int(cleaned["respuesta_correcta"]))
-    cleaned["teoria"] = str(int(cleaned["teoria"]))
-    return cleaned
+def clean_row(row: dict[str, str], row_number: int, csv_format: str) -> dict[str, str]:
+    teoria = parse_teoria(row.get("teoria", ""))
+    question = question_from_csv_row(row, row_number - 2, teoria)
+
+    return question_to_new_csv_row(question, row)
+
+
+def question_to_new_csv_row(
+    question: Question,
+    source_row: dict[str, str],
+) -> dict[str, str]:
+    correct_option = next(option for option in question.options if option.is_correct)
+    false_options = [option for option in question.options if not option.is_correct]
+
+    return {
+        "question_id": source_row.get("question_id", "").strip(),
+        "enunciado": question.enunciado,
+        "respuesta_correcta": correct_option.text,
+        "opcion_falsa_1": false_options[0].text,
+        "opcion_falsa_2": false_options[1].text,
+        "opcion_falsa_3": false_options[2].text,
+        "explicacion": question.explicacion,
+        "tema": question.tema,
+        "teoria": str(question.teoria),
+    }
 
 
 def create_backup() -> Path:
     BACKUP_DIR.mkdir(exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = BACKUP_DIR / f"preguntas_{timestamp}.csv"
+    backup_path = BACKUP_DIR / f"{CSV_PATH.stem}_{timestamp}.csv"
     shutil.copy2(CSV_PATH, backup_path)
     return backup_path
 
@@ -309,6 +331,8 @@ def ensure_csv_ends_with_newline() -> None:
 
 def preview_questions_from_text(csv_text: str) -> dict[str, object]:
     existing_rows = validate_main_csv_rows()
+    used_question_ids = {row["question_id"] for row in existing_rows if row["question_id"]}
+    id_generator = question_id_generator(used_question_ids)
     existing_question_index = build_question_match_index(
         [row["enunciado"] for row in existing_rows]
     )
@@ -323,9 +347,9 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
     total_read = 0
 
     with io.StringIO(csv_text.strip().lstrip("\ufeff")) as file:
-        for row_number, row in read_csv_rows(file, allow_headerless=True):
+        for row_number, row, csv_format in read_csv_rows(file, allow_headerless=True):
             total_read += 1
-            row_errors = validate_row(row, row_number)
+            row_errors = validate_row(row, row_number, csv_format)
 
             if row_errors:
                 errors.append(
@@ -337,7 +361,12 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
                 )
                 continue
 
-            cleaned = clean_row(row)
+            cleaned = clean_row(row, row_number, csv_format)
+            cleaned["question_id"] = assign_question_id(
+                cleaned.get("question_id", ""),
+                used_question_ids,
+                id_generator,
+            )
             enunciado = cleaned["enunciado"]
             normalized_enunciado = normalize_enunciado(enunciado)
 
@@ -387,19 +416,12 @@ def preview_questions_from_text(csv_text: str) -> dict[str, object]:
                 )
                 continue
 
-            valid_rows.append(
-                {
-                    "row_number": row_number,
-                    **cleaned,
-                }
-            )
+            valid_rows.append({"row_number": row_number, **cleaned})
             new_index_entry = {
                 "original": enunciado,
                 "normalized": normalized_enunciado,
                 "index": len(existing_question_index),
-                "sensitive_markers": _extract_sensitive_markers(
-                    normalized_enunciado
-                ),
+                "sensitive_markers": _extract_sensitive_markers(normalized_enunciado),
             }
             existing_question_index.append(new_index_entry)
             normalized_existing_questions.append(normalized_enunciado)
@@ -420,12 +442,13 @@ def append_questions(rows: list[dict[str, str]]) -> Path | None:
 
     backup_path = create_backup()
     ensure_csv_ends_with_newline()
+    needs_header = not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0
+
     with CSV_PATH.open("a", encoding="utf-8-sig", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=EXPECTED_COLUMNS)
-        writer.writerows(
-            {column: row[column] for column in EXPECTED_COLUMNS}
-            for row in rows
-        )
+        writer = csv.DictWriter(file, fieldnames=NEW_COLUMNS)
+        if needs_header:
+            writer.writeheader()
+        writer.writerows({column: row[column] for column in NEW_COLUMNS} for row in rows)
 
     validate_main_csv_rows()
     return backup_path
@@ -433,16 +456,15 @@ def append_questions(rows: list[dict[str, str]]) -> Path | None:
 
 def rewrite_main_csv(rows: list[dict[str, str]]) -> None:
     with CSV_PATH.open("w", encoding="utf-8-sig", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=EXPECTED_COLUMNS)
+        writer = csv.DictWriter(file, fieldnames=NEW_COLUMNS)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({column: row[column] for column in NEW_COLUMNS} for row in rows)
 
 
 def deduplicate_main_csv() -> dict[str, object]:
     rows = validate_main_csv_rows()
     last_index_by_enunciado = {
-        normalize_enunciado(row["enunciado"]): index
-        for index, row in enumerate(rows)
+        normalize_enunciado(row["enunciado"]): index for index, row in enumerate(rows)
     }
     final_rows = [
         row
@@ -503,3 +525,36 @@ def import_questions(import_path: Path) -> int:
                 print(f"- {error}")
 
     return 1 if preview["errors"] else 0
+
+
+def question_id_generator(used_question_ids: set[str]):
+    next_number = max(
+        (_question_id_number(question_id) for question_id in used_question_ids),
+        default=0,
+    ) + 1
+
+    while True:
+        candidate = f"q_{next_number:06d}"
+        next_number += 1
+        if candidate not in used_question_ids:
+            yield candidate
+
+
+def assign_question_id(
+    raw_question_id: str,
+    used_question_ids: set[str],
+    id_generator,
+) -> str:
+    question_id = raw_question_id.strip()
+    if question_id and question_id not in used_question_ids:
+        used_question_ids.add(question_id)
+        return question_id
+
+    generated_question_id = next(id_generator)
+    used_question_ids.add(generated_question_id)
+    return generated_question_id
+
+
+def _question_id_number(question_id: str) -> int:
+    match = re.fullmatch(r"q_(\d+)", question_id)
+    return int(match.group(1)) if match else 0

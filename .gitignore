@@ -12,12 +12,15 @@ ENV/
 # Flask / environment variables
 .env
 .env.*
+!.env.example
 instance/
 
 # Local databases
 *.db
 *.sqlite
 *.sqlite3
+local_data/
+archive/old_databases/
 
 # Logs
 *.log

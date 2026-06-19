@@ -1,0 +1,80 @@
+name: Sync questions to Supabase
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "preguntas_nuevo_formato.csv"
+      - "scripts/sync_questions_to_supabase.py"
+      - "scripts/check_question_repository_parity.py"
+      - "src/quiz_estudio/services/question_sync_service.py"
+      - "src/quiz_estudio/services/question_parity_service.py"
+      - "src/quiz_estudio/supabase_question_client.py"
+      - "src/quiz_estudio/question_model.py"
+      - "src/quiz_estudio/question_repository.py"
+      - "src/quiz_estudio/question_ids.py"
+      - "src/quiz_estudio/db/supabase_questions_schema.sql"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".github/workflows/sync-questions-to-supabase.yml"
+
+jobs:
+  sync-questions:
+    name: Dry-run and apply CSV question sync
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+
+    steps:
+      - name: Check required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY SUPABASE_DATABASE_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error title=Missing GitHub secret::$name is not configured."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+
+      - name: Compile sync code
+        run: |
+          python -m py_compile \
+            src/quiz_estudio/services/question_sync_service.py \
+            src/quiz_estudio/services/question_parity_service.py \
+            src/quiz_estudio/supabase_question_client.py \
+            scripts/sync_questions_to_supabase.py \
+            scripts/check_question_repository_parity.py
+
+      - name: Run tests
+        env:
+          PYTHONPATH: src
+        run: pytest -q
+
+      - name: Dry-run CSV to Supabase sync
+        run: python scripts/sync_questions_to_supabase.py
+
+      - name: Apply CSV to Supabase sync
+        run: python scripts/sync_questions_to_supabase.py --apply
+
+      - name: Check CSV and Supabase parity
+        run: python scripts/check_question_repository_parity.py

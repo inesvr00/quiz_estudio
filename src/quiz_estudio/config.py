@@ -5,11 +5,15 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CSV_PATH = PROJECT_ROOT / "preguntas.csv"
-DB_PATH = PROJECT_ROOT / "stats.db"
-DATABASE_URL = "postgresql://postgres.sidzjtxybrtypdppcfhv:9udtdjMgYbLm1OdH@aws-0-eu-west-1.pooler.supabase.com:5432/postgres"
-SECRET_KEY = "quiz-estudio-una-clave-larga-random-2026"
-APP_PASSWORD = "quiero estudiar"
+QUESTIONS_CSV_PATH = Path(
+    os.getenv("QUESTIONS_CSV_PATH", PROJECT_ROOT / "preguntas_nuevo_formato.csv")
+)
+QUESTION_REPOSITORY_BACKEND = os.getenv("QUESTION_REPOSITORY_BACKEND", "csv").strip().lower()
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+APP_ENV = os.getenv("APP_ENV", os.getenv("FLASK_ENV", "development")).strip().lower()
+IS_PRODUCTION = APP_ENV == "production" or os.getenv("RENDER", "").strip().lower() == "true"
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 PAGE_SIZE = 50
 ALLOWED_BATCH_SIZES = {1, 10}
 BACKUP_DIR = PROJECT_ROOT / "backups"
