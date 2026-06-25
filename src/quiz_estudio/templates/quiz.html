@@ -11,7 +11,11 @@
 {% endif %}
 
 <form method="post">
+    <input type="hidden" name="attempt_id" value="{{ attempt_id }}">
+
     {% for q in questions %}
+        <input type="hidden" name="question_id" value="{{ q.question_id }}">
+
         <section class="question-card">
             <p class="topic">{{ q.tema }}</p>
             <h2>{{ loop.index }}. {{ q.enunciado }}</h2>
