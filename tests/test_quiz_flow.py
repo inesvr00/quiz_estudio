@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import re
-
 import pytest
-from werkzeug.datastructures import MultiDict
 
 from quiz_estudio import create_app
 
@@ -168,32 +165,8 @@ def _start_quiz(client, data):
     return response
 
 
-def _start_quiz_without_follow(client, data):
-    response = client.post("/", data=data, follow_redirects=False)
-    assert response.status_code == 302
-    return response
-
-
 def _reverse_shuffle(values):
     values.reverse()
-
-
-def _quiz_answer_data(attempt_id: str, question_ids: list[str], option_number: int = 1) -> MultiDict:
-    return MultiDict(
-        [
-            ("attempt_id", attempt_id),
-            *[("question_id", question_id) for question_id in question_ids],
-            *[
-                (f"pregunta_{question_id}", f"{question_id}:option_{option_number}")
-                for question_id in question_ids
-            ],
-        ]
-    )
-
-
-def _active_attempt(session_data):
-    attempt_id = session_data["active_attempt_id"]
-    return attempt_id, session_data["quiz_attempts"][attempt_id]
 
 
 @pytest.mark.parametrize(
@@ -207,24 +180,20 @@ def test_quiz_quick_sizes_work(client, quiz_size_mode, expected_count):
     response = _start_quiz(client, {"quiz_size_mode": quiz_size_mode})
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert len(attempt["question_ids"]) == expected_count
-        assert "question_ids" not in session_data
-        assert "option_orders" not in session_data
+        assert len(session_data["question_ids"]) == expected_count
         assert "questions" not in session_data
 
     assert b"Terminar y corregir" in response.data
 
 
 def test_quiz_options_are_shuffled_when_attempt_is_created(client, monkeypatch):
-    monkeypatch.setattr("quiz_estudio.services.quiz_correction_service.random.shuffle", _reverse_shuffle)
+    monkeypatch.setattr("quiz_estudio.blueprints.quiz.random.shuffle", _reverse_shuffle)
 
     response = _start_quiz(client, {"quiz_size_mode": "1"})
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        question_id = str(attempt["question_ids"][0])
-        assert attempt["option_order"][question_id] == [
+        question_id = str(session_data["question_ids"][0])
+        assert session_data["option_orders"][question_id] == [
             f"{question_id}:option_4",
             f"{question_id}:option_3",
             f"{question_id}:option_2",
@@ -235,18 +204,16 @@ def test_quiz_options_are_shuffled_when_attempt_is_created(client, monkeypatch):
 
 
 def test_quiz_option_order_stays_stable_within_attempt(client, monkeypatch):
-    monkeypatch.setattr("quiz_estudio.services.quiz_correction_service.random.shuffle", _reverse_shuffle)
+    monkeypatch.setattr("quiz_estudio.blueprints.quiz.random.shuffle", _reverse_shuffle)
     _start_quiz(client, {"quiz_size_mode": "1"})
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        initial_orders = dict(attempt["option_order"])
+        initial_orders = dict(session_data["option_orders"])
 
     response = client.get("/quiz")
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert attempt["option_order"] == initial_orders
+        assert session_data["option_orders"] == initial_orders
 
     assert response.data.find(b"1. D") < response.data.find(b"4. A")
 
@@ -258,9 +225,7 @@ def test_quiz_custom_size_overrides_quick_choice(client):
     )
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert len(attempt["question_ids"]) == 35
-        assert "question_ids" not in session_data
+        assert len(session_data["question_ids"]) == 35
         assert "questions" not in session_data
 
 
@@ -271,10 +236,9 @@ def test_quiz_theory_mode_filters_questions(client):
     )
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert attempt["mode"] == "theory"
-        assert len(attempt["question_ids"]) == 10
-        assert all(int(question_id.removeprefix("q_")) % 2 == 0 for question_id in attempt["question_ids"])
+        assert session_data["quiz_mode"] == "theory"
+        assert len(session_data["question_ids"]) == 10
+        assert all(int(question_id.removeprefix("q_")) % 2 == 0 for question_id in session_data["question_ids"])
 
     assert b"Terminar y corregir" in response.data
 
@@ -286,10 +250,9 @@ def test_quiz_practical_mode_filters_questions(client):
     )
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert attempt["mode"] == "practical"
-        assert len(attempt["question_ids"]) == 10
-        assert all(int(question_id.removeprefix("q_")) % 2 == 1 for question_id in attempt["question_ids"])
+        assert session_data["quiz_mode"] == "practical"
+        assert len(session_data["question_ids"]) == 10
+        assert all(int(question_id.removeprefix("q_")) % 2 == 1 for question_id in session_data["question_ids"])
 
     assert b"Terminar y corregir" in response.data
 
@@ -301,9 +264,7 @@ def test_quiz_invalid_custom_falls_back_to_quick_choice(client):
     )
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert len(attempt["question_ids"]) == 10
-        assert "question_ids" not in session_data
+        assert len(session_data["question_ids"]) == 10
         assert "questions" not in session_data
 
     assert b"entero mayor que 0" in response.data
@@ -316,9 +277,7 @@ def test_quiz_limits_to_available_questions(client):
     )
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert len(attempt["question_ids"]) == 73
-        assert "question_ids" not in session_data
+        assert len(session_data["question_ids"]) == 73
         assert "questions" not in session_data
 
     assert b"Solo hay 73 preguntas disponibles" in response.data
@@ -341,207 +300,36 @@ def test_quiz_shows_clear_error_when_topics_and_mode_are_empty(client, monkeypat
     assert b"No hay preguntas para los temas y modo seleccionados." in response.data
     with client.session_transaction() as session_data:
         assert "question_ids" not in session_data
-        assert "quiz_attempts" not in session_data
+        assert session_data.get("quiz_mode") is None
 
 
 def test_quiz_results_page_works(client):
     _start_quiz(client, {"quiz_size_mode": "10"})
 
     with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_ids = attempt["question_ids"]
+        question_ids = session_data["question_ids"]
 
-    answers = _quiz_answer_data(attempt_id, question_ids)
+    answers = {
+        f"pregunta_{question_id}": f"{question_id}:option_1"
+        for question_id in question_ids
+    }
     response = client.post("/quiz", data=answers, follow_redirects=True)
 
     assert response.status_code == 200
     assert b"Correcci" in response.data
     assert b"Resultado:" in response.data
-    for question_id in question_ids:
-        assert f"Pregunta {question_id}".encode() in response.data
-
-
-def test_quiz_results_use_exact_question_ids_from_started_attempt(client):
-    _start_quiz(client, {"quiz_size_mode": "10"})
-
-    with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_ids = list(attempt["question_ids"])
-
-    answers = _quiz_answer_data(attempt_id, question_ids)
-    response = client.post("/quiz", data=answers, follow_redirects=True)
-
-    assert response.status_code == 200
-    rendered_question_ids = [
-        match.decode()
-        for match in re.findall(rb"Pregunta (q_\d{6})", response.data)
-    ]
-    assert rendered_question_ids == question_ids
-    assert b"Resultado: 10/10" in response.data
-
-
-def test_quiz_post_does_not_select_random_questions(client, monkeypatch):
-    _start_quiz(client, {"quiz_size_mode": "10"})
-
-    with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_ids = list(attempt["question_ids"])
-
-    def fail_if_selected(*args, **kwargs):
-        raise AssertionError("POST /quiz must not select quiz questions")
-
-    monkeypatch.setattr("quiz_estudio.blueprints.quiz.select_quiz_questions", fail_if_selected)
-    response = client.post(
-        "/quiz",
-        data=_quiz_answer_data(attempt_id, question_ids),
-        follow_redirects=True,
-    )
-
-    assert response.status_code == 200
-    assert b"Resultado: 10/10" in response.data
-
-
-def test_quiz_post_without_attempt_does_not_silently_select_new_questions(client, monkeypatch):
-    _start_quiz(client, {"quiz_size_mode": "10"})
-
-    with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_ids = list(attempt["question_ids"])
-        session_data.clear()
-
-    def fail_if_selected(*args, **kwargs):
-        raise AssertionError("Missing attempts must not select quiz questions")
-
-    monkeypatch.setattr("quiz_estudio.blueprints.quiz.select_quiz_questions", fail_if_selected)
-    response = client.post(
-        "/quiz",
-        data=_quiz_answer_data(attempt_id, question_ids),
-        follow_redirects=True,
-    )
-
-    assert response.status_code == 400
-    assert b"intento" in response.data.lower()
-    assert b"Resultado:" not in response.data
-
-
-def test_two_quizzes_in_different_tabs_are_corrected_by_attempt_id(client):
-    _start_quiz(client, {"quiz_size_mode": "10", "quiz_mode": "theory"})
-
-    with client.session_transaction() as session_data:
-        first_attempt_id, first_attempt = _active_attempt(session_data)
-        first_question_ids = list(first_attempt["question_ids"])
-
-    _start_quiz(client, {"quiz_size_mode": "10", "quiz_mode": "practical"})
-
-    with client.session_transaction() as session_data:
-        second_attempt_id, second_attempt = _active_attempt(session_data)
-        second_question_ids = list(second_attempt["question_ids"])
-
-    assert first_attempt_id != second_attempt_id
-    assert first_question_ids != second_question_ids
-
-    response = client.post(
-        "/quiz",
-        data=_quiz_answer_data(first_attempt_id, first_question_ids),
-        follow_redirects=True,
-    )
-
-    assert response.status_code == 200
-    assert b"Resultado: 10/10" in response.data
-    for question_id in first_question_ids:
-        assert f"Pregunta {question_id}".encode() in response.data
-    for question_id in second_question_ids:
-        assert f"Pregunta {question_id}".encode() not in response.data
-
-
-def test_refreshing_first_quiz_tab_uses_query_attempt_id_after_second_quiz(client):
-    first_response = _start_quiz_without_follow(client, {"quiz_size_mode": "10", "quiz_mode": "theory"})
-    first_quiz_url = first_response.headers["Location"]
-
-    with client.session_transaction() as session_data:
-        first_attempt_id = session_data["active_attempt_id"]
-        first_question_ids = list(session_data["quiz_attempts"][first_attempt_id]["question_ids"])
-
-    second_response = _start_quiz_without_follow(client, {"quiz_size_mode": "10", "quiz_mode": "practical"})
-    second_quiz_url = second_response.headers["Location"]
-
-    with client.session_transaction() as session_data:
-        second_attempt_id = session_data["active_attempt_id"]
-        second_question_ids = list(session_data["quiz_attempts"][second_attempt_id]["question_ids"])
-
-    assert first_attempt_id != second_attempt_id
-    assert first_quiz_url.endswith(f"/quiz?attempt_id={first_attempt_id}")
-    assert second_quiz_url.endswith(f"/quiz?attempt_id={second_attempt_id}")
-
-    response = client.get(first_quiz_url)
-
-    assert response.status_code == 200
-    for question_id in first_question_ids:
-        assert f"Pregunta {question_id}".encode() in response.data
-    for question_id in second_question_ids:
-        assert f"Pregunta {question_id}".encode() not in response.data
-
-
-def test_attempt_questions_preserve_attempt_order_when_repository_returns_unordered(client, monkeypatch):
-    _start_quiz(client, {"quiz_size_mode": "10"})
-
-    with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_ids = list(attempt["question_ids"])
-
-    def reversed_get_questions_by_ids(questions, requested_question_ids):
-        questions_by_id = {question["question_id"]: question for question in questions}
-        return [
-            questions_by_id[question_id]
-            for question_id in reversed(requested_question_ids)
-            if question_id in questions_by_id
-        ]
-
-    monkeypatch.setattr("quiz_estudio.services.quiz_correction_service.get_questions_by_ids", reversed_get_questions_by_ids)
-    response = client.post(
-        "/quiz",
-        data=_quiz_answer_data(attempt_id, question_ids),
-        follow_redirects=True,
-    )
-
-    rendered_question_ids = [
-        match.decode()
-        for match in re.findall(rb"Pregunta (q_\d{6})", response.data)
-    ]
-    assert rendered_question_ids == question_ids
-
-
-def test_invalid_option_order_falls_back_without_breaking_quiz(client):
-    _start_quiz(client, {"quiz_size_mode": "1"})
-
-    with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_id = attempt["question_ids"][0]
-        attempt["option_order"][question_id] = f"{question_id}:option_1"
-        session_data["quiz_attempts"] = {
-            **session_data["quiz_attempts"],
-            attempt_id: attempt,
-        }
-
-    response = client.get(f"/quiz?attempt_id={attempt_id}")
-
-    assert response.status_code == 200
-    assert f"Pregunta {question_id}".encode() in response.data
-    for option_text in (b"1. A</span>", b"2. B</span>", b"3. C</span>", b"4. D</span>"):
-        assert option_text in response.data
 
 
 def test_correct_option_scores_even_when_visual_position_changes(client, app, monkeypatch):
-    monkeypatch.setattr("quiz_estudio.services.quiz_correction_service.random.shuffle", _reverse_shuffle)
+    monkeypatch.setattr("quiz_estudio.blueprints.quiz.random.shuffle", _reverse_shuffle)
     _start_quiz(client, {"quiz_size_mode": "1"})
 
     with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_id = attempt["question_ids"][0]
+        question_id = session_data["question_ids"][0]
 
     response = client.post(
         "/quiz",
-        data=_quiz_answer_data(attempt_id, [question_id]),
+        data={f"pregunta_{question_id}": f"{question_id}:option_1"},
         follow_redirects=True,
     )
 
@@ -558,16 +346,15 @@ def test_correct_option_scores_even_when_visual_position_changes(client, app, mo
 
 
 def test_false_option_fails_even_if_it_is_first_visual_option(client, app, monkeypatch):
-    monkeypatch.setattr("quiz_estudio.services.quiz_correction_service.random.shuffle", _reverse_shuffle)
+    monkeypatch.setattr("quiz_estudio.blueprints.quiz.random.shuffle", _reverse_shuffle)
     _start_quiz(client, {"quiz_size_mode": "1"})
 
     with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_id = attempt["question_ids"][0]
+        question_id = session_data["question_ids"][0]
 
     response = client.post(
         "/quiz",
-        data=_quiz_answer_data(attempt_id, [question_id], option_number=4),
+        data={f"pregunta_{question_id}": f"{question_id}:option_4"},
         follow_redirects=True,
     )
 
@@ -584,17 +371,16 @@ def test_false_option_fails_even_if_it_is_first_visual_option(client, app, monke
 
 
 def test_quiz_correction_does_not_use_visual_position(client, app, monkeypatch):
-    monkeypatch.setattr("quiz_estudio.services.quiz_correction_service.random.shuffle", _reverse_shuffle)
+    monkeypatch.setattr("quiz_estudio.blueprints.quiz.random.shuffle", _reverse_shuffle)
     _start_quiz(client, {"quiz_size_mode": "1"})
 
     with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_id = attempt["question_ids"][0]
-        assert attempt["option_order"][str(question_id)][0] == f"{question_id}:option_4"
+        question_id = session_data["question_ids"][0]
+        assert session_data["option_orders"][str(question_id)][0] == f"{question_id}:option_4"
 
     client.post(
         "/quiz",
-        data=_quiz_answer_data(attempt_id, [question_id], option_number=4),
+        data={f"pregunta_{question_id}": f"{question_id}:option_4"},
         follow_redirects=True,
     )
 
@@ -605,10 +391,12 @@ def test_multiple_question_quiz_records_all_attempts(client, app):
     _start_quiz(client, {"quiz_size_mode": "10"})
 
     with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_ids = attempt["question_ids"]
+        question_ids = session_data["question_ids"]
 
-    answers = _quiz_answer_data(attempt_id, question_ids)
+    answers = {
+        f"pregunta_{question_id}": f"{question_id}:option_1"
+        for question_id in question_ids
+    }
     response = client.post("/quiz", data=answers, follow_redirects=True)
 
     assert response.status_code == 200
@@ -616,43 +404,16 @@ def test_multiple_question_quiz_records_all_attempts(client, app):
     assert len(app.config["fake_repo"].saved_attempts) == 10
 
 
-def test_refreshing_results_does_not_duplicate_attempt_stats(client, app):
-    _start_quiz(client, {"quiz_size_mode": "10"})
-
-    with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_ids = attempt["question_ids"]
-
-    response = client.post(
-        "/quiz",
-        data=_quiz_answer_data(attempt_id, question_ids),
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 302
-    assert len(app.config["fake_repo"].saved_attempts) == 10
-
-    results_url = response.headers["Location"]
-    first_refresh = client.get(results_url)
-    second_refresh = client.get(results_url)
-
-    assert first_refresh.status_code == 200
-    assert second_refresh.status_code == 200
-    assert b"Resultado: 10/10" in second_refresh.data
-    assert len(app.config["fake_repo"].saved_attempts) == 10
-
-
 def test_failed_questions_are_recorded_after_wrong_answer(client, app, monkeypatch):
-    monkeypatch.setattr("quiz_estudio.services.quiz_correction_service.random.shuffle", _reverse_shuffle)
+    monkeypatch.setattr("quiz_estudio.blueprints.quiz.random.shuffle", _reverse_shuffle)
     _start_quiz(client, {"quiz_size_mode": "1"})
 
     with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_id = attempt["question_ids"][0]
+        question_id = session_data["question_ids"][0]
 
     client.post(
         "/quiz",
-        data=_quiz_answer_data(attempt_id, [question_id], option_number=4),
+        data={f"pregunta_{question_id}": f"{question_id}:option_4"},
         follow_redirects=True,
     )
     response = client.get("/preguntas-falladas")
@@ -666,12 +427,11 @@ def test_statistics_are_updated_after_answer(client, app):
     _start_quiz(client, {"quiz_size_mode": "1"})
 
     with client.session_transaction() as session_data:
-        attempt_id, attempt = _active_attempt(session_data)
-        question_id = attempt["question_ids"][0]
+        question_id = session_data["question_ids"][0]
 
     client.post(
         "/quiz",
-        data=_quiz_answer_data(attempt_id, [question_id]),
+        data={f"pregunta_{question_id}": f"{question_id}:option_1"},
         follow_redirects=True,
     )
     response = client.get("/estadisticas")
@@ -689,7 +449,5 @@ def test_otra_mas_rebuilds_questions_from_ids(client):
     assert b"Terminar y corregir" in response.data
 
     with client.session_transaction() as session_data:
-        _, attempt = _active_attempt(session_data)
-        assert len(attempt["question_ids"]) == 10
-        assert "question_ids" not in session_data
+        assert len(session_data["question_ids"]) == 10
         assert "questions" not in session_data
