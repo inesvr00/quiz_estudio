@@ -10,8 +10,10 @@
     <p class="warning">{{ notice }}</p>
 {% endif %}
 
-<form method="post">
+<form method="post" action="{{ url_for('quiz.quiz', attempt_id=attempt_id) }}">
+    <input type="hidden" name="attempt_id" value="{{ attempt_id }}">
     {% for q in questions %}
+        <input type="hidden" name="question_id" value="{{ q.question_id }}">
         <section class="question-card">
             <p class="topic">{{ q.tema }}</p>
             <h2>{{ loop.index }}. {{ q.enunciado }}</h2>
